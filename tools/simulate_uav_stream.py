@@ -1,0 +1,1 @@
+# UAV stream simulation placeholder

@@ -1,0 +1,1 @@
+-- MySQL seed data placeholder
