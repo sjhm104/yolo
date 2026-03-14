@@ -112,6 +112,31 @@ pyyolo
 |-- README.md
 ```
 
+## 数据库初始化
+
+项目数据库初始化脚本位于 [database/schema/init.sql](database/schema/init.sql)。
+
+脚本功能包括：
+
+1. 创建数据库 campus_waste_db（若不存在）
+2. 选择并使用 campus_waste_db
+3. 创建 users、drones、detection_records、cleaning_tasks 四张核心业务表
+4. 初始化索引、外键与中文注释
+
+执行方式（MySQL 客户端）：
+
+```sql
+SOURCE database/schema/init.sql;
+```
+
+执行方式（命令行）：
+
+```bash
+mysql -u root -p < database/schema/init.sql
+```
+
+更多数据库说明请查看 [database/README.md](database/README.md)。
+
 ## 远程仓库
 
 GitHub: https://github.com/sjhm104/YOLO
