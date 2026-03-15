@@ -137,6 +137,23 @@ mysql -u root -p < database/schema/init.sql
 
 更多数据库说明请查看 [database/README.md](database/README.md)。
 
+## 后端依赖安装
+
+后端依赖清单位于 [backend/requirements.txt](backend/requirements.txt)。
+
+在项目根目录执行：
+
+```bash
+pip install -r backend/requirements.txt
+```
+
+当前后端关键依赖包括：
+
+- fastapi：Web API 框架
+- sqlalchemy：ORM 与数据库访问
+- pymysql：MySQL 驱动
+- pydantic-settings：基于环境变量的配置管理（Pydantic v2）
+
 ## 远程仓库
 
 GitHub: https://github.com/sjhm104/YOLO
