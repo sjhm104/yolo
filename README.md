@@ -2,6 +2,39 @@
 
 本项目采用前后端分离架构，后端使用 FastAPI，AI 算法模块使用 PyTorch/YOLO，前端使用 Vue 3，数据库使用 MySQL。
 
+## 项目简介
+
+本项目面向校园场景，利用无人机巡航采集图像，通过目标检测模型识别垃圾目标，并自动生成清理任务，形成“巡检-识别-派单-处置”的闭环流程。
+
+## 系统架构
+
+- 前端（Vue 3）：展示检测结果、任务状态与管理页面。
+- 后端（FastAPI）：提供 REST API、业务逻辑编排与数据持久化。
+- AI 模块（PyTorch/YOLO）：负责训练、推理与模型导出。
+- 数据库（MySQL）：存储用户、无人机、检测记录与清理任务。
+
+## 当前已实现
+
+- 完成 MySQL 初始化脚本与核心表结构设计。
+- 完成 SQLAlchemy ORM 模型（users、drones、detection_records、cleaning_tasks）。
+- 完成检测上传接口：POST /api/v1/detections/upload。
+- 完成业务规则：当 has_waste=true 时自动创建清理任务。
+- 完成 FastAPI 主入口、v1 路由聚合与跨域配置。
+
+## 快速体验
+
+1. 初始化数据库：执行 database/schema/init.sql。
+2. 启动后端服务：在 backend 目录运行 uvicorn app.main:app --reload。
+3. 打开接口文档：访问 http://127.0.0.1:8000/docs。
+4. 调用检测上传接口：验证检测记录与清理任务自动生成。
+
+## 模块文档索引
+
+- 后端模块说明：[backend/README.md](backend/README.md)
+- 前端模块说明：[frontend/README.md](frontend/README.md)
+- AI 模块说明：[ai/README.md](ai/README.md)
+- 数据库模块说明：[database/README.md](database/README.md)
+
 ## 项目目录结构（Tree）
 
 ```text
@@ -112,47 +145,11 @@ pyyolo
 |-- README.md
 ```
 
-## 数据库初始化
+## 快速开始
 
-项目数据库初始化脚本位于 [database/schema/init.sql](database/schema/init.sql)。
-
-脚本功能包括：
-
-1. 创建数据库 campus_waste_db（若不存在）
-2. 选择并使用 campus_waste_db
-3. 创建 users、drones、detection_records、cleaning_tasks 四张核心业务表
-4. 初始化索引、外键与中文注释
-
-执行方式（MySQL 客户端）：
-
-```sql
-SOURCE database/schema/init.sql;
-```
-
-执行方式（命令行）：
-
-```bash
-mysql -u root -p < database/schema/init.sql
-```
-
-更多数据库说明请查看 [database/README.md](database/README.md)。
-
-## 后端依赖安装
-
-后端依赖清单位于 [backend/requirements.txt](backend/requirements.txt)。
-
-在项目根目录执行：
-
-```bash
-pip install -r backend/requirements.txt
-```
-
-当前后端关键依赖包括：
-
-- fastapi：Web API 框架
-- sqlalchemy：ORM 与数据库访问
-- pymysql：MySQL 驱动
-- pydantic-settings：基于环境变量的配置管理（Pydantic v2）
+1. 先完成数据库初始化，参考 [database/README.md](database/README.md)。
+2. 再启动后端服务，参考 [backend/README.md](backend/README.md)。
+3. 最后联调前端页面，参考 [frontend/README.md](frontend/README.md)。
 
 ## 远程仓库
 
