@@ -30,6 +30,10 @@ class CleaningTaskStatus(str, enum.Enum):
 	COMPLETED = "completed"
 
 
+def enum_values(enum_cls: type[enum.Enum]) -> list[str]:
+	return [item.value for item in enum_cls]
+
+
 class User(Base):
 	__tablename__ = "users"
 
@@ -57,7 +61,7 @@ class User(Base):
 		comment="用户真实姓名，用于任务分配、人员管理与报表展示",
 	)
 	role: Mapped[UserRole] = mapped_column(
-		Enum(UserRole, name="users_role_enum"),
+		Enum(UserRole, name="users_role_enum", values_callable=enum_values),
 		nullable=False,
 		default=UserRole.CLEANER,
 		index=True,
@@ -104,7 +108,7 @@ class Drone(Base):
 		comment="无人机唯一编号，对应设备铭牌编号或系统编码，用于设备唯一识别",
 	)
 	status: Mapped[DroneStatus] = mapped_column(
-		Enum(DroneStatus, name="drones_status_enum"),
+		Enum(DroneStatus, name="drones_status_enum", values_callable=enum_values),
 		nullable=False,
 		default=DroneStatus.OFFLINE,
 		comment="无人机运行状态：idle空闲待命，flying飞行作业中，offline离线不可用，默认offline",
@@ -242,7 +246,11 @@ class CleaningTask(Base):
 		comment="分配的环卫人员ID，外键关联users.id，允许为空表示任务尚未分配具体执行人",
 	)
 	status: Mapped[CleaningTaskStatus] = mapped_column(
-		Enum(CleaningTaskStatus, name="cleaning_tasks_status_enum"),
+		Enum(
+			CleaningTaskStatus,
+			name="cleaning_tasks_status_enum",
+			values_callable=enum_values,
+		),
 		nullable=False,
 		default=CleaningTaskStatus.PENDING,
 		index=True,

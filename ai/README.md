@@ -28,3 +28,5 @@ pip install -r ai/requirements.txt
 ## 与后端协作
 
 后端建议通过服务层调用本模块推理能力，不直接耦合训练逻辑。
+
+说明：AI 模块本身不直接依赖 MySQL，数据库读写由后端完成（当前本地实例位于 D:/pysoft/mysql/instances/campus）。

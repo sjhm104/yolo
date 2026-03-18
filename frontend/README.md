@@ -24,6 +24,11 @@
 
 ## 联调说明
 
+本地联调前请确保以下服务已启动：
+
+- 后端 FastAPI 服务（http://127.0.0.1:8000）
+- MySQL campus 实例（D:/pysoft/mysql/instances/campus）
+
 前端调用后端接口时，建议将 API 前缀统一配置为：
 
 ```text

@@ -26,12 +26,20 @@ D:\pysoft\anaconda\envs\myenv\python.exe
 
 ## 启动方式
 
+启动后端前，请先确保 MySQL 已启动（实例目录见 database 模块文档）。
+
 必须先进入 backend 目录：
 
 ```bash
 cd backend
 "D:\pysoft\anaconda\envs\myenv\python.exe" -m uvicorn app.main:app --reload
 ```
+
+## 运行依赖（本地）
+
+- MySQL 程序目录：D:/pysoft/mysql/mysql-8.4.8/mysql-8.4.8-winx64
+- MySQL 实例配置：D:/pysoft/mysql/instances/campus/conf/my.ini
+- 数据库连接默认值：mysql+pymysql://root:123456@localhost:3306/campus_waste_db
 
 ## 接口入口
 

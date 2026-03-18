@@ -20,6 +20,14 @@
 - 完成检测上传接口：POST /api/v1/detections/upload。
 - 完成业务规则：当 has_waste=true 时自动创建清理任务。
 - 完成 FastAPI 主入口、v1 路由聚合与跨域配置。
+- 完成本地 MySQL 程序与实例分离部署（程序位于 D 盘，实例位于 instances/campus）。
+
+## 本地 MySQL 部署约定
+
+- 程序目录：D:/pysoft/mysql/mysql-8.4.8/mysql-8.4.8-winx64
+- 实例目录：D:/pysoft/mysql/instances/campus
+- 实例配置：D:/pysoft/mysql/instances/campus/conf/my.ini
+- 实例数据：D:/pysoft/mysql/instances/campus/data
 
 ## 快速体验
 
@@ -148,8 +156,9 @@ pyyolo
 ## 快速开始
 
 1. 先完成数据库初始化，参考 [database/README.md](database/README.md)。
-2. 再启动后端服务，参考 [backend/README.md](backend/README.md)。
-3. 最后联调前端页面，参考 [frontend/README.md](frontend/README.md)。
+2. 启动本地 MySQL 实例，参考 [database/README.md](database/README.md)。
+3. 再启动后端服务，参考 [backend/README.md](backend/README.md)。
+4. 最后联调前端页面，参考 [frontend/README.md](frontend/README.md)。
 
 ## 远程仓库
 

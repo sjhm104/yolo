@@ -2,6 +2,15 @@
 
 本目录用于管理“基于无人机校园垃圾检测系统”的数据库相关资源，包括建库建表脚本、迁移脚本与测试数据脚本。
 
+## 本地部署（程序与实例分离）
+
+- MySQL 程序目录：D:/pysoft/mysql/mysql-8.4.8/mysql-8.4.8-winx64
+- 实例目录：D:/pysoft/mysql/instances/campus
+- 配置文件：D:/pysoft/mysql/instances/campus/conf/my.ini
+- 数据目录：D:/pysoft/mysql/instances/campus/data
+- 日志目录：D:/pysoft/mysql/instances/campus/logs
+- 临时目录：D:/pysoft/mysql/instances/campus/tmp
+
 ## 目录结构
 
 - schema：数据库结构初始化脚本
@@ -21,6 +30,18 @@
 
 ## 执行方式
 
+先启动本地 MySQL 实例（PowerShell）：
+
+```bash
+D:/pysoft/mysql/mysql-8.4.8/mysql-8.4.8-winx64/bin/mysqld.exe --defaults-file=D:/pysoft/mysql/instances/campus/conf/my.ini --console
+```
+
+停止实例：
+
+```bash
+D:/pysoft/mysql/mysql-8.4.8/mysql-8.4.8-winx64/bin/mysqladmin.exe --user=root --password=123456 --host=127.0.0.1 --port=3306 shutdown
+```
+
 请在 MySQL 客户端执行：
 
 ```sql
@@ -30,7 +51,7 @@ SOURCE database/schema/init.sql;
 或使用命令行执行：
 
 ```bash
-mysql -u root -p < database/schema/init.sql
+D:/pysoft/mysql/mysql-8.4.8/mysql-8.4.8-winx64/bin/mysql.exe --user=root --password=123456 --host=127.0.0.1 --port=3306 -e "source D:/pyyolo/database/schema/init.sql"
 ```
 
 ## 已定义核心表
