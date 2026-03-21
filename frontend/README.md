@@ -2,6 +2,8 @@
 
 本模块负责无人机检测结果展示、上传交互与任务状态可视化。
 
+当前已接入 Vue 3 + Vite + Element Plus + Axios，可直接本地运行。
+
 ## 目录说明
 
 - src/views：页面级视图
@@ -20,7 +22,24 @@
 
 ## 启动说明
 
-当前仓库已准备好目录骨架，后续可按 Vue 3 + Vite 标准方式初始化并启动。
+在 frontend 目录执行：
+
+```bash
+npm install
+npm run dev
+```
+
+默认访问地址：
+
+```text
+http://localhost:5173
+```
+
+可用脚本：
+
+- npm run dev：本地开发
+- npm run build：生产构建
+- npm run preview：构建产物预览
 
 ## 联调说明
 

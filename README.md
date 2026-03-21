@@ -21,6 +21,8 @@
 - 完成业务规则：当 has_waste=true 时自动创建清理任务。
 - 完成 FastAPI 主入口、v1 路由聚合与跨域配置。
 - 完成本地 MySQL 程序与实例分离部署（程序位于 D 盘，实例位于 instances/campus）。
+- 完成前端管理页面基础能力（Dashboard、任务管理、路由与 API 封装）。
+- 完成前端 Vite 启动基座（dev/build/preview 脚本可用）。
 
 ## 本地 MySQL 部署约定
 
@@ -33,8 +35,10 @@
 
 1. 初始化数据库：执行 database/schema/init.sql。
 2. 启动后端服务：在 backend 目录运行 uvicorn app.main:app --reload。
-3. 打开接口文档：访问 http://127.0.0.1:8000/docs。
-4. 调用检测上传接口：验证检测记录与清理任务自动生成。
+3. 启动前端服务：在 frontend 目录依次运行 npm install 与 npm run dev。
+4. 打开接口文档：访问 http://127.0.0.1:8000/docs。
+5. 打开前端页面：访问 http://localhost:5173。
+6. 调用检测上传接口：验证检测记录与清理任务自动生成。
 
 ## 模块文档索引
 
