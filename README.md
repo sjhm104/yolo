@@ -17,7 +17,10 @@
 
 - 完成 MySQL 初始化脚本与核心表结构设计。
 - 完成 SQLAlchemy ORM 模型（users、drones、detection_records、cleaning_tasks）。
-- 完成检测上传接口：POST /api/v1/detections/upload。
+- 完成检测上传接口：POST /api/v1/detections/upload（multipart/form-data）。
+- 完成上传参数规范：file + drone_id + latitude + longitude。
+- 完成图片落盘与推理联动：图片保存到 backend/uploads 后调用 YOLOv8 推理。
+- 完成检测服务层单例化模型加载，避免重复加载模型权重。
 - 完成业务规则：当 has_waste=true 时自动创建清理任务。
 - 完成 FastAPI 主入口、v1 路由聚合与跨域配置。
 - 完成本地 MySQL 程序与实例分离部署（程序位于 D 盘，实例位于 instances/campus）。
@@ -38,7 +41,30 @@
 3. 启动前端服务：在 frontend 目录依次运行 npm install 与 npm run dev。
 4. 打开接口文档：访问 http://127.0.0.1:8000/docs。
 5. 打开前端页面：访问 http://localhost:5173。
-6. 调用检测上传接口：验证检测记录与清理任务自动生成。
+6. 以 multipart/form-data 调用检测上传接口。
+7. 在数据库中验证 detection_records 与 cleaning_tasks 的自动写入。
+
+## 检测上传接口（最新）
+
+- 请求方法：POST
+- 接口路径：/api/v1/detections/upload
+- Content-Type：multipart/form-data
+- 表单字段：
+	- file（必填，图片文件，支持 .jpg/.jpeg/.png/.bmp/.webp）
+	- drone_id（必填，int）
+	- latitude（必填，decimal）
+	- longitude（必填，decimal）
+- 返回结果：DetectionRecord；当 has_waste=true 时自动创建 CleaningTask（PENDING）。
+
+示例请求：
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/detections/upload" \
+	-F "file=@./tests/assets/drone_demo.jpg" \
+	-F "drone_id=1" \
+	-F "latitude=31.2304" \
+	-F "longitude=121.4737"
+```
 
 ## 模块文档索引
 
