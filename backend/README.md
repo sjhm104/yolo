@@ -1,64 +1,110 @@
 # 后端模块说明（FastAPI）
 
-本模块负责 API 服务、业务逻辑编排、数据库访问与模型调用接口。
+本模块负责 API 服务、业务编排、数据库写入与 AI 推理调用。
+
+## 文档同步状态
+
+- 同步日期：2026-04-18
+- 当前实现：已支持“图片上传 -> YOLO 推理 -> 记录入库 -> 自动建任务 -> 前端展示”闭环。
 
 ## 目录说明
 
-- app/main.py：FastAPI 启动入口
-- app/api/v1：接口路由层
-- app/schemas：Pydantic 数据校验模型
-- app/db：数据库连接、会话与 ORM 模型
-- app/services：业务服务层
+- app/main.py：FastAPI 启动入口、CORS 配置、/uploads 静态挂载
+- app/api/v1/router.py：v1 路由聚合
+- app/api/v1/endpoints/detection.py：检测上传接口
+- app/api/v1/endpoints/tasks.py：任务列表与状态更新
+- app/api/v1/endpoints/dashboard.py：统计数据接口
+- app/services/detector_service.py：AI 推理服务层（单例模型加载）
+- app/db：数据库会话与 ORM 模型
+- app/schemas：Pydantic 请求响应模型
 
 ## 依赖安装
-
-建议使用解释器：
-
-```text
-D:\pysoft\anaconda\envs\myenv\python.exe
-```
 
 在项目根目录执行：
 
 ```bash
-"D:\pysoft\anaconda\envs\myenv\python.exe" -m pip install -r backend/requirements.txt
+python -m pip install -r backend/requirements.txt
 ```
+
+关键依赖：
+
+- fastapi
+- uvicorn[standard]
+- sqlalchemy
+- pymysql
+- python-multipart
 
 ## 启动方式
 
-启动后端前，请先确保 MySQL 已启动（实例目录见 database 模块文档）。
-
-必须先进入 backend 目录：
-
 ```bash
 cd backend
-"D:\pysoft\anaconda\envs\myenv\python.exe" -m uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload
 ```
 
-## 运行依赖（本地）
+默认地址：
 
-- MySQL 程序目录：D:/pysoft/mysql/mysql-8.4.8/mysql-8.4.8-winx64
-- MySQL 实例配置：D:/pysoft/mysql/instances/campus/conf/my.ini
-- 数据库连接默认值：mysql+pymysql://root:123456@localhost:3306/campus_waste_db
+- 服务入口：http://127.0.0.1:8000/
+- Swagger：http://127.0.0.1:8000/docs
+- OpenAPI：http://127.0.0.1:8000/openapi.json
 
-## 接口入口
+## 路由概览
 
-- 服务地址：http://127.0.0.1:8000/
-- Swagger 文档：http://127.0.0.1:8000/docs
-- 检测上传接口：POST /api/v1/detections/upload
+- POST /api/v1/detections/upload：上传图片并触发识别
+- GET /api/v1/dashboard/stats：大屏统计
+- GET /api/v1/tasks/：任务列表
+- PATCH /api/v1/tasks/{task_id}/status：更新任务状态
+
+## 检测上传接口（对齐实现）
+
+- 请求类型：multipart/form-data
+- 字段：
+	- file：图片文件（jpg/jpeg/png/bmp/webp）
+	- drone_id：无人机 ID
+	- latitude：纬度
+	- longitude：经度
+- 处理流程：
+	- 保存图片到 backend/uploads
+	- 调用 YOLO 推理
+	- 写入 detection_records
+	- 当 has_waste=true 自动创建 cleaning_tasks（PENDING）
+
+示例：
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/detections/upload" \
+	-F "file=@./tests/assets/drone_demo.jpg" \
+	-F "drone_id=1" \
+	-F "latitude=31.2304" \
+	-F "longitude=121.4737"
+```
+
+## 上传图片静态访问
+
+后端已自动创建并挂载目录：
+
+- 物理目录：backend/uploads
+- 访问前缀：/uploads
+
+例如数据库中 image_url 为 uploads/abc.jpg，则可通过 http://127.0.0.1:8000/uploads/abc.jpg 访问。
 
 ## 快速验收
 
-1. 访问根接口，确认返回 Welcome 文案。
-2. 在 Swagger 调用 POST /api/v1/detections/upload。
-3. 当 has_waste=true 时，确认数据库自动新增 cleaning_tasks 任务。
+1. 启动后端并打开 Swagger。
+2. 调用 POST /api/v1/detections/upload 上传图片。
+3. 查看返回 DetectionRecord（has_waste、confidence）。
+4. 若 has_waste=true，验证 cleaning_tasks 自动新增。
+5. 访问 /uploads/xxx.jpg 验证图片静态可访问。
 
 ## 常见问题
 
 - ModuleNotFoundError: No module named app
 	- 原因：未在 backend 目录启动。
-	- 处理：先执行 cd backend，再运行 uvicorn。
+	- 处理：先执行 cd backend 再启动。
 
-- 无法解析 fastapi 导入
-	- 原因：当前解释器未安装依赖。
-	- 处理：使用同一解释器重新安装 backend/requirements.txt。
+- 422 Unprocessable Entity（上传接口）
+	- 原因：请求未使用 multipart/form-data 或字段缺失。
+	- 处理：检查 file、drone_id、latitude、longitude 是否都已提交。
+
+- 上传成功但图片无法预览
+	- 原因：image_url 未拼接到服务域名，或 /uploads 未挂载成功。
+	- 处理：检查 app/main.py 的静态挂载与前端 URL 处理逻辑。

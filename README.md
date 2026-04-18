@@ -2,6 +2,12 @@
 
 本项目采用前后端分离架构，后端使用 FastAPI，AI 算法模块使用 PyTorch/YOLO，前端使用 Vue 3，数据库使用 MySQL。
 
+## 文档同步状态
+
+- 同步日期：2026-04-18
+- 已同步范围：README、backend/README、frontend/README、ai/README、database/README。
+- 当前闭环状态：无人机巡检 -> 图片上传 -> AI 识别 -> 自动建任务 -> 前端展示 已联通。
+
 ## 项目简介
 
 本项目面向校园场景，利用无人机巡航采集图像，通过目标检测模型识别垃圾目标，并自动生成清理任务，形成“巡检-识别-派单-处置”的闭环流程。
@@ -44,6 +50,33 @@
 6. 以 multipart/form-data 调用检测上传接口。
 7. 在数据库中验证 detection_records 与 cleaning_tasks 的自动写入。
 
+## 无人机模拟上传
+
+项目已提供模拟脚本 tools/simulate_uav_stream.py，可按固定间隔循环上传本地图片到检测接口。
+
+示例：
+
+```bash
+python tools/simulate_uav_stream.py \
+	--image-dir ./tests/assets \
+	--interval 2 \
+	--drone-id 1 \
+	--lat 31.2304 \
+	--lng 121.4737 \
+	--api-url http://127.0.0.1:8000/api/v1/detections/upload
+```
+
+参数说明：
+
+- --image-dir：图片目录（必填）
+- --interval：上传间隔秒数，默认 3
+- --drone-id：无人机 ID，默认 1
+- --lat：纬度，默认 31.2304
+- --lng：经度，默认 121.4737
+- --api-url：上传接口地址
+
+脚本会输出每次上传结果：是否检测到垃圾、置信度、是否生成清理任务。
+
 ## 检测上传接口（最新）
 
 - 请求方法：POST
@@ -66,12 +99,35 @@ curl -X POST "http://127.0.0.1:8000/api/v1/detections/upload" \
 	-F "longitude=121.4737"
 ```
 
+说明：
+
+- 上传成功后后端会返回 DetectionRecord。
+- 当 has_waste=true 时会自动创建 CleaningTask（PENDING）。
+- 图片保存路径为 backend/uploads，并可通过 /uploads 进行静态访问。
+
+## 毕设演示脚本（建议流程）
+
+1. 展示系统架构：前端 Vue 3、后端 FastAPI、AI YOLO、MySQL。
+2. 启动后端与前端，打开 Dashboard 页面。
+3. 在 Dashboard 的“无人机巡检图片上传”卡片中上传图片并填写 drone_id、经纬度。
+4. 展示“AI 识别结果”卡片：图片、是否检测到垃圾、置信度、任务生成状态。
+5. 打开数据库表演示结果落库：detection_records 与 cleaning_tasks。
+6. 运行模拟脚本连续上传，展示系统持续处理能力。
+7. 总结闭环：无人机巡检 -> 图片上传 -> AI 识别 -> 自动派单 -> 前端可视化。
+
 ## 模块文档索引
 
 - 后端模块说明：[backend/README.md](backend/README.md)
 - 前端模块说明：[frontend/README.md](frontend/README.md)
 - AI 模块说明：[ai/README.md](ai/README.md)
 - 数据库模块说明：[database/README.md](database/README.md)
+
+建议阅读顺序：
+
+1. database/README.md（初始化数据库）
+2. backend/README.md（启动接口与上传链路）
+3. frontend/README.md（上传展示与任务页面）
+4. ai/README.md（推理模块与后端接入方式）
 
 ## 项目目录结构（Tree）
 

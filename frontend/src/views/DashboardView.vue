@@ -20,6 +20,15 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-row :gutter="16" class="loop-row">
+      <el-col :xs="24" :lg="11">
+        <VideoUpload @uploaded="handleUploaded" />
+      </el-col>
+      <el-col :xs="24" :lg="13">
+        <DetectionResult :record="latestRecord" />
+      </el-col>
+    </el-row>
   </section>
 </template>
 
@@ -28,6 +37,8 @@ import { computed, onMounted, ref } from "vue";
 import { Aim, CircleCheck, Clock, DataLine } from "@element-plus/icons-vue";
 
 import { getStats } from "../api";
+import DetectionResult from "../components/DetectionResult.vue";
+import VideoUpload from "../components/VideoUpload.vue";
 
 const stats = ref({
   total_detections: 0,
@@ -35,6 +46,7 @@ const stats = ref({
   pending_tasks: 0,
   completed_tasks: 0,
 });
+const latestRecord = ref(null);
 
 const statCards = computed(() => [
   {
@@ -72,6 +84,11 @@ const fetchStats = async () => {
   stats.value = data;
 };
 
+const handleUploaded = (record) => {
+  latestRecord.value = record;
+  fetchStats();
+};
+
 onMounted(fetchStats);
 </script>
 
@@ -98,6 +115,10 @@ onMounted(fetchStats);
 .stat-card {
   margin-bottom: 16px;
   border: none;
+}
+
+.loop-row {
+  margin-top: 4px;
 }
 
 .stat-content {

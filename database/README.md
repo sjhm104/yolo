@@ -2,6 +2,11 @@
 
 本目录用于管理“基于无人机校园垃圾检测系统”的数据库相关资源，包括建库建表脚本、迁移脚本与测试数据脚本。
 
+## 文档同步状态
+
+- 同步日期：2026-04-18
+- 当前实现：检测上传成功后写入 detection_records，检测到垃圾时自动创建 cleaning_tasks。
+
 ## 本地部署（程序与实例分离）
 
 - MySQL 程序目录：D:/pysoft/mysql/mysql-8.4.8/mysql-8.4.8-winx64
@@ -27,6 +32,11 @@
 2. 指定字符集 utf8mb4 与排序规则 utf8mb4_unicode_ci
 3. 创建核心业务表并添加详细中文注释
 4. 建立索引与外键约束
+
+当前业务闭环对应关系：
+
+- detection_records.has_waste=true -> 自动生成 cleaning_tasks（status=pending）
+- cleaning_tasks.record_id -> 外键关联 detection_records.id
 
 ## 执行方式
 
@@ -60,6 +70,27 @@ D:/pysoft/mysql/mysql-8.4.8/mysql-8.4.8-winx64/bin/mysql.exe --user=root --passw
 2. drones：无人机设备表（状态、位置、活跃时间）
 3. detection_records：垃圾检测记录表（图像、坐标、置信度）
 4. cleaning_tasks：清理任务表（任务分配与完成状态）
+
+## 联调验证建议
+
+1. 调用 POST /api/v1/detections/upload 上传一张图片。
+2. 在 detection_records 表确认新增记录（image_url、latitude、longitude、has_waste、confidence）。
+3. 若 has_waste=true，在 cleaning_tasks 表确认新增一条 pending 任务。
+4. 调用 PATCH /api/v1/tasks/{task_id}/status 更新任务状态，验证 completed_time 写入。
+
+常用 SQL：
+
+```sql
+SELECT id, drone_id, image_url, has_waste, confidence, created_at
+FROM detection_records
+ORDER BY id DESC
+LIMIT 10;
+
+SELECT id, record_id, cleaner_id, status, created_at, completed_time
+FROM cleaning_tasks
+ORDER BY id DESC
+LIMIT 10;
+```
 
 ## 设计要点
 

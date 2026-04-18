@@ -1,4 +1,5 @@
 import http from "./http";
+export { uploadDetection } from "./detection";
 
 export const getStats = () => http.get("/dashboard/stats");
 

@@ -4,6 +4,11 @@
 
 当前已接入 Vue 3 + Vite + Element Plus + Axios，可直接本地运行。
 
+## 文档同步状态
+
+- 同步日期：2026-04-18
+- 当前实现：Dashboard 已接入上传与识别结果展示组件，任务页支持状态更新。
+
 ## 目录说明
 
 - src/views：页面级视图
@@ -59,3 +64,22 @@ http://localhost:5173
 ```text
 /api/v1/detections/upload
 ```
+
+## 页面闭环能力
+
+Dashboard 页面已接入完整闭环组件：
+
+- VideoUpload.vue：上传图片 + 填写 drone_id/latitude/longitude，调用 /detections/upload
+- DetectionResult.vue：展示识别图片、是否检测到垃圾、置信度、是否生成任务
+
+说明：后端返回 DetectionRecord 不含独立任务字段，页面根据 has_waste 展示“已生成/未生成任务”状态。
+
+上传成功后，页面会自动显示最新 detection_record，并刷新统计卡片。
+
+## 毕设演示建议
+
+1. 进入 Dashboard，先展示统计卡片初始状态。
+2. 上传一张无垃圾图片，展示“未检测到垃圾/未生成任务”。
+3. 上传一张有垃圾图片，展示“检测到垃圾/已生成任务”。
+4. 结合后端数据库结果说明自动派单规则（has_waste=true 自动创建 cleaning_task）。
+5. 可配合 tools/simulate_uav_stream.py 做连续上传演示，体现实时性。
