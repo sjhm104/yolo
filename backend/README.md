@@ -4,8 +4,8 @@
 
 ## 文档同步状态
 
-- 同步日期：2026-04-18
-- 当前实现：已支持“图片上传 -> YOLO 推理 -> 记录入库 -> 自动建任务 -> 前端展示”闭环。
+- 同步日期：2026-04-22
+- 当前实现：已支持“图片上传 -> YOLO 推理 -> 记录入库 -> 自动建任务 -> 自动分配 -> 前端展示”闭环。
 
 ## 目录说明
 
@@ -15,6 +15,7 @@
 - app/api/v1/endpoints/tasks.py：任务列表与状态更新
 - app/api/v1/endpoints/dashboard.py：统计数据接口
 - app/services/detector_service.py：AI 推理服务层（单例模型加载）
+- app/services/task_scheduler.py：任务调度服务（APScheduler 定时分配）
 - app/db：数据库会话与 ORM 模型
 - app/schemas：Pydantic 请求响应模型
 
@@ -33,6 +34,7 @@ python -m pip install -r backend/requirements.txt
 - sqlalchemy
 - pymysql
 - python-multipart
+- apscheduler
 
 ## 启动方式
 
@@ -47,12 +49,38 @@ python -m uvicorn app.main:app --reload
 - Swagger：http://127.0.0.1:8000/docs
 - OpenAPI：http://127.0.0.1:8000/openapi.json
 
+启动行为：
+
+- 应用 startup 时自动启动任务调度器
+- 应用 shutdown 时自动停止任务调度器
+
 ## 路由概览
 
 - POST /api/v1/detections/upload：上传图片并触发识别
 - GET /api/v1/dashboard/stats：大屏统计
 - GET /api/v1/tasks/：任务列表
 - PATCH /api/v1/tasks/{task_id}/status：更新任务状态
+
+## 任务调度模块（新增）
+
+调度策略：
+
+- 扫描频率：每 30 秒
+- 目标任务：cleaning_tasks 中 status=pending 且 cleaner_id 为空
+- 分配策略：选择 role=cleaner 的第一个用户（按 id 升序）
+
+分配后更新字段：
+
+- cleaner_id
+- status -> assigned
+- assigned_time
+
+健壮性设计：
+
+- max_instances=1，避免同一任务重入执行
+- 条件更新（status+cleaner_id）避免并发重复分配
+- 异常捕获、事务回滚与日志输出
+- 预留 CleanerSelectionStrategy，后续可扩展按距离/负载策略
 
 ## 检测上传接口（对齐实现）
 
