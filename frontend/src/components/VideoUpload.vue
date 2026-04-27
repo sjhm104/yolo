@@ -7,13 +7,18 @@
     <el-card class="upload-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>无人机巡检视频上传</span>
+          <span>无人机巡检视频分析</span>
           <el-tag type="info">video/mp4, video/avi</el-tag>
         </div>
       </template>
 
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" class="upload-form">
-        <el-form-item label="巡检视频" prop="file">
+      <el-radio-group v-model="mode" class="mode-switch">
+        <el-radio-button label="upload">本地上传</el-radio-button>
+        <el-radio-button label="cloud">云端视频URL</el-radio-button>
+      </el-radio-group>
+
+      <el-form ref="formRef" :model="form" label-width="90px" class="upload-form">
+        <el-form-item v-if="mode === 'upload'" label="巡检视频" prop="file">
           <el-upload
             class="upload-box"
             drag
@@ -32,8 +37,12 @@
           </el-upload>
         </el-form-item>
 
+        <el-form-item v-else label="视频地址" prop="video_url">
+          <el-input v-model="form.video_url" placeholder="请输入可公网访问的 mp4/avi 视频 URL" clearable />
+        </el-form-item>
+
         <el-form-item>
-          <el-button type="primary" :loading="processing" @click="submitForm">上传并开始分析</el-button>
+          <el-button type="primary" :loading="processing" @click="submitForm">开始分析</el-button>
           <el-button :disabled="processing" @click="resetForm">重置</el-button>
         </el-form-item>
       </el-form>
@@ -46,21 +55,19 @@ import { reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { UploadFilled } from "@element-plus/icons-vue";
 
-import { uploadDetectionVideo } from "../api/detection";
+import { analyzeDetectionVideoUrl, uploadDetectionVideo } from "../api/detection";
 
 const emit = defineEmits(["uploaded"]);
 
 const formRef = ref();
 const processing = ref(false);
 const fileList = ref([]);
+const mode = ref("upload");
 
 const form = reactive({
   file: null,
+  video_url: "",
 });
-
-const rules = {
-  file: [{ required: true, message: "请上传视频文件", trigger: "change" }],
-};
 
 const handleFileChange = (uploadFile, uploadFiles) => {
   fileList.value = uploadFiles.slice(-1);
@@ -73,18 +80,28 @@ const handleFileRemove = () => {
 };
 
 const submitForm = async () => {
-  if (!formRef.value) {
-    return;
-  }
-
-  await formRef.value.validate();
-
-  const payload = new FormData();
-  payload.append("file", form.file);
-
   processing.value = true;
   try {
-    const { data } = await uploadDetectionVideo(payload);
+    let data;
+
+    if (mode.value === "upload") {
+      if (!form.file) {
+        ElMessage.warning("请先上传视频文件");
+        return;
+      }
+      const payload = new FormData();
+      payload.append("file", form.file);
+      const resp = await uploadDetectionVideo(payload);
+      data = resp.data;
+    } else {
+      if (!form.video_url?.trim()) {
+        ElMessage.warning("请输入云端视频 URL");
+        return;
+      }
+      const resp = await analyzeDetectionVideoUrl(form.video_url.trim());
+      data = resp.data;
+    }
+
     ElMessage.success("视频分析完成");
     emit("uploaded", data);
   } finally {
@@ -95,6 +112,7 @@ const submitForm = async () => {
 const resetForm = () => {
   formRef.value?.resetFields();
   form.file = null;
+  form.video_url = "";
   fileList.value = [];
 };
 </script>
@@ -119,6 +137,10 @@ const resetForm = () => {
 
 .upload-form {
   padding-top: 6px;
+}
+
+.mode-switch {
+  margin-bottom: 12px;
 }
 
 .upload-box {

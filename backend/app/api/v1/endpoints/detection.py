@@ -5,10 +5,11 @@ from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel
+from pydantic import AnyHttpUrl, BaseModel
 
 from app.services.detector_service import (
 	get_allowed_video_extensions,
+	process_video_from_url,
 	process_uploaded_video,
 )
 
@@ -24,6 +25,10 @@ class VideoDetectionResponse(BaseModel):
 	garbage_count: int
 	garbage_summary: list[dict[str, object]]
 	class_summary: list[dict[str, object]]
+
+
+class VideoUrlAnalyzeRequest(BaseModel):
+	video_url: AnyHttpUrl
 
 
 def _validate_video_upload(file: UploadFile) -> str:
@@ -70,6 +75,23 @@ async def upload_and_detect_video(file: UploadFile = File(...)) -> VideoDetectio
 		if saved_path.exists():
 			saved_path.unlink()
 		raise HTTPException(status_code=500, detail="视频推理失败") from exc
+
+	output_video_relpath = str(result["output_video_relpath"])
+	return VideoDetectionResponse(
+		output_video_url=f"/{output_video_relpath}",
+		has_campus_waste=bool(result.get("has_campus_waste", False)),
+		garbage_count=int(result.get("garbage_count", 0)),
+		garbage_summary=list(result.get("garbage_summary", [])),
+		class_summary=list(result.get("class_summary", [])),
+	)
+
+
+@router.post("/analyze-video-url", response_model=VideoDetectionResponse, status_code=201)
+async def analyze_cloud_video(payload: VideoUrlAnalyzeRequest) -> VideoDetectionResponse:
+	try:
+		result = await run_in_threadpool(process_video_from_url, str(payload.video_url))
+	except Exception as exc:
+		raise HTTPException(status_code=500, detail="云端视频推理失败") from exc
 
 	output_video_relpath = str(result["output_video_relpath"])
 	return VideoDetectionResponse(

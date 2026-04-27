@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from collections import Counter
 from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 from uuid import uuid4
 
 import cv2
@@ -158,3 +160,46 @@ def process_uploaded_video(input_video_path: str) -> dict[str, object]:
 
 def get_allowed_video_extensions() -> set[str]:
 	return {".mp4", ".avi"}
+
+
+def _resolve_video_suffix(video_url: str, content_type: str | None) -> str:
+	path_suffix = Path(urlparse(video_url).path).suffix.lower()
+	if path_suffix in get_allowed_video_extensions():
+		return path_suffix
+
+	content_type = (content_type or "").lower()
+	if "mp4" in content_type:
+		return ".mp4"
+	if "avi" in content_type or "x-msvideo" in content_type:
+		return ".avi"
+
+	raise ValueError("云端视频仅支持 mp4/avi")
+
+
+def download_video_from_url(video_url: str) -> Path:
+	ensure_video_dirs()
+	headers = {
+		"User-Agent": "CampusWasteDetector/1.0",
+	}
+	req = Request(video_url, headers=headers)
+
+	with urlopen(req, timeout=60) as resp:
+		content_type = resp.headers.get("Content-Type", "")
+		suffix = _resolve_video_suffix(video_url, content_type)
+		saved_path = UPLOAD_VIDEOS_DIR / f"{uuid4().hex}{suffix}"
+		with saved_path.open("wb") as out_file:
+			while True:
+				chunk = resp.read(1024 * 1024)
+				if not chunk:
+					break
+				out_file.write(chunk)
+
+	if not saved_path.exists() or saved_path.stat().st_size == 0:
+		raise ValueError("云端视频下载失败")
+
+	return saved_path
+
+
+def process_video_from_url(video_url: str) -> dict[str, object]:
+	downloaded_video = download_video_from_url(video_url)
+	return process_uploaded_video(str(downloaded_video))

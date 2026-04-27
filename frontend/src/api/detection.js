@@ -7,3 +7,12 @@ export const uploadDetectionVideo = (formData) =>
 		},
 		timeout: 0,
 	});
+
+export const analyzeDetectionVideoUrl = (videoUrl) =>
+	http.post(
+		"/detections/analyze-video-url",
+		{ video_url: videoUrl },
+		{
+			timeout: 0,
+		}
+	);
