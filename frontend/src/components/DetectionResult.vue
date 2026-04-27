@@ -2,38 +2,31 @@
   <el-card class="result-card" shadow="hover">
     <template #header>
       <div class="card-header">
-        <span>AI 识别结果</span>
-        <el-tag :type="taskCreated ? 'warning' : 'success'">
-          {{ taskCreated ? "已生成清理任务" : "未生成清理任务" }}
-        </el-tag>
+        <span>视频分析结果</span>
+        <el-tag type="success">分析完成</el-tag>
       </div>
     </template>
 
     <div v-if="!record" class="empty-state">
-      <el-empty description="暂无识别结果，请先上传巡检图片" />
+      <el-empty description="暂无分析结果，请先上传巡检视频" />
     </div>
 
     <div v-else class="result-layout">
-      <div class="preview-wrap">
-        <el-image class="preview-image" :src="imageUrl" fit="cover" :preview-src-list="[imageUrl]" />
+      <div class="video-wrap">
+        <video class="preview-video" controls autoplay :src="videoUrl"></video>
       </div>
 
       <div class="info-wrap">
         <el-descriptions :column="1" border>
-          <el-descriptions-item label="记录ID">{{ record.id }}</el-descriptions-item>
-          <el-descriptions-item label="无人机ID">{{ record.drone_id ?? "-" }}</el-descriptions-item>
-          <el-descriptions-item label="检测结果">
-            <el-tag :type="record.has_waste ? 'danger' : 'success'">
-              {{ record.has_waste ? "检测到垃圾" : "未检测到垃圾" }}
-            </el-tag>
+          <el-descriptions-item label="总检测目标数">
+            {{ record.total_detections ?? 0 }}
           </el-descriptions-item>
-          <el-descriptions-item label="置信度">
-            {{ confidenceText }}
+          <el-descriptions-item label="处理帧数">
+            {{ record.processed_frames ?? 0 }}
           </el-descriptions-item>
-          <el-descriptions-item label="经纬度">
-            {{ record.latitude }}, {{ record.longitude }}
+          <el-descriptions-item label="输出视频地址">
+            {{ record.output_video_url || "-" }}
           </el-descriptions-item>
-          <el-descriptions-item label="图片路径">{{ record.image_url }}</el-descriptions-item>
         </el-descriptions>
       </div>
     </div>
@@ -59,26 +52,16 @@ const apiOrigin = (() => {
   }
 })();
 
-const taskCreated = computed(() => Boolean(props.record?.has_waste));
-
-const confidenceText = computed(() => {
-  const value = props.record?.confidence;
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return "-";
-  }
-  return `${(Number(value) * 100).toFixed(2)}%`;
-});
-
-const imageUrl = computed(() => {
-  if (!props.record?.image_url) {
+const videoUrl = computed(() => {
+  if (!props.record?.output_video_url) {
     return "";
   }
 
-  if (/^https?:\/\//i.test(props.record.image_url)) {
-    return props.record.image_url;
+  if (/^https?:\/\//i.test(props.record.output_video_url)) {
+    return props.record.output_video_url;
   }
 
-  const relativePath = props.record.image_url.replace(/^\/+/, "");
+  const relativePath = props.record.output_video_url.replace(/^\/+/, "");
   return `${apiOrigin}/${relativePath}`;
 });
 </script>
@@ -107,15 +90,16 @@ const imageUrl = computed(() => {
   gap: 16px;
 }
 
-.preview-wrap {
+.video-wrap {
   border-radius: 12px;
   overflow: hidden;
-  background: #f3f4f6;
+  background: #111827;
 }
 
-.preview-image {
+.preview-video {
   width: 100%;
-  height: 280px;
+  height: 300px;
+  display: block;
 }
 
 @media (min-width: 992px) {
@@ -123,7 +107,7 @@ const imageUrl = computed(() => {
     grid-template-columns: 1.05fr 1fr;
   }
 
-  .preview-image {
+  .preview-video {
     height: 100%;
     min-height: 320px;
   }

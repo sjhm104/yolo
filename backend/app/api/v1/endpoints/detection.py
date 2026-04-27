@@ -1,92 +1,77 @@
-import shutil
-from decimal import Decimal
+from __future__ import annotations
+
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel
 
-from app.db.base import CleaningTask, CleaningTaskStatus, DetectionRecord
-from app.db.session import get_db
-from app.schemas.detection import DetectionRecordResponse
-from app.services.detector_service import process_drone_image
+from app.services.detector_service import (
+	get_allowed_video_extensions,
+	process_uploaded_video,
+)
 
 router = APIRouter()
 
-UPLOAD_DIR = Path(__file__).resolve().parents[4] / "uploads"
-ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+UPLOAD_VIDEO_DIR = Path(__file__).resolve().parents[4] / "uploads" / "videos"
+ALLOWED_VIDEO_EXTENSIONS = get_allowed_video_extensions()
 
 
-def _save_uploaded_file(file: UploadFile) -> tuple[Path, str]:
-	if not file.content_type or not file.content_type.startswith("image/"):
-		raise HTTPException(status_code=400, detail="仅支持图片文件上传")
+class VideoDetectionResponse(BaseModel):
+	output_video_url: str
+	total_detections: int
+	processed_frames: int
 
-	UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+def _validate_video_upload(file: UploadFile) -> str:
 	suffix = Path(file.filename or "").suffix.lower()
-	if suffix and suffix not in ALLOWED_IMAGE_EXTENSIONS:
-		raise HTTPException(status_code=400, detail="图片格式不支持")
-	if not suffix:
-		suffix = ".jpg"
+	if suffix not in ALLOWED_VIDEO_EXTENSIONS:
+		raise HTTPException(status_code=400, detail="仅支持 .mp4 或 .avi 视频")
+
+	content_type = (file.content_type or "").lower()
+	if content_type and not content_type.startswith("video/"):
+		raise HTTPException(status_code=400, detail="上传文件必须是视频")
+
+	return suffix
+
+
+async def _save_uploaded_video(file: UploadFile, suffix: str) -> Path:
+	UPLOAD_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
 
 	filename = f"{uuid4().hex}{suffix}"
-	saved_path = UPLOAD_DIR / filename
+	saved_path = UPLOAD_VIDEO_DIR / filename
 
 	try:
 		with saved_path.open("wb") as out_file:
-			shutil.copyfileobj(file.file, out_file)
+			while True:
+				chunk = await file.read(1024 * 1024)
+				if not chunk:
+					break
+				out_file.write(chunk)
 	except OSError as exc:
-		raise HTTPException(status_code=500, detail="图片保存失败") from exc
+		raise HTTPException(status_code=500, detail="视频保存失败") from exc
 	finally:
-		file.file.close()
+		await file.close()
 
-	return saved_path, f"uploads/{filename}"
+	return saved_path
 
 
-@router.post("/upload", response_model=DetectionRecordResponse, status_code=201)
-def upload_detection_result(
-	file: UploadFile = File(...),
-	drone_id: int = Form(...),
-	latitude: Decimal = Form(...),
-	longitude: Decimal = Form(...),
-	db: Session = Depends(get_db),
-) -> DetectionRecord:
-	saved_path, image_url = _save_uploaded_file(file)
+@router.post("/upload-video", response_model=VideoDetectionResponse, status_code=201)
+async def upload_and_detect_video(file: UploadFile = File(...)) -> VideoDetectionResponse:
+	suffix = _validate_video_upload(file)
+	saved_path = await _save_uploaded_video(file, suffix)
 
 	try:
-		ai_result = process_drone_image(str(saved_path))
+		result = await run_in_threadpool(process_uploaded_video, str(saved_path))
 	except Exception as exc:
 		if saved_path.exists():
 			saved_path.unlink()
-		raise HTTPException(status_code=500, detail="AI 推理失败") from exc
+		raise HTTPException(status_code=500, detail="视频推理失败") from exc
 
-	has_waste = bool(ai_result.get("has_waste", False))
-	max_confidence = float(ai_result.get("max_confidence", 0.0))
-
-	try:
-		detection_record = DetectionRecord(
-			drone_id=drone_id,
-			image_url=image_url,
-			latitude=latitude,
-			longitude=longitude,
-			has_waste=has_waste,
-			confidence=max_confidence,
-		)
-
-		db.add(detection_record)
-		db.flush()
-
-		if has_waste:
-			cleaning_task = CleaningTask(
-				record_id=detection_record.id,
-				status=CleaningTaskStatus.PENDING,
-			)
-			db.add(cleaning_task)
-
-		db.commit()
-		db.refresh(detection_record)
-		return detection_record
-	except SQLAlchemyError as exc:
-		db.rollback()
-		raise HTTPException(status_code=500, detail="检测记录写入失败") from exc
+	output_video_relpath = str(result["output_video_relpath"])
+	return VideoDetectionResponse(
+		output_video_url=f"/{output_video_relpath}",
+		total_detections=int(result["total_detections"]),
+		processed_frames=int(result["processed_frames"]),
+	)

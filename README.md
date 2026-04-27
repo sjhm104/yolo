@@ -4,9 +4,9 @@
 
 ## 文档同步状态
 
-- 同步日期：2026-04-22
+- 同步日期：2026-04-27
 - 已同步范围：README、backend/README、frontend/README、ai/README、database/README。
-- 当前闭环状态：无人机巡检 -> 图片上传 -> AI 识别 -> 自动建任务 -> 自动分配 -> 前端展示 已联通。
+- 当前闭环状态：无人机巡检视频 -> 视频上传 -> 逐帧 AI 识别 -> 输出分析视频 -> 前端展示 已联通。
 
 ## 项目简介
 
@@ -23,15 +23,14 @@
 
 - 完成 MySQL 初始化脚本与核心表结构设计。
 - 完成 SQLAlchemy ORM 模型（users、drones、detection_records、cleaning_tasks）。
-- 完成检测上传接口：POST /api/v1/detections/upload（multipart/form-data）。
-- 完成上传参数规范：file + drone_id + latitude + longitude。
-- 完成图片落盘与推理联动：图片保存到 backend/uploads 后调用 YOLOv8 推理。
+- 完成视频上传接口：POST /api/v1/detections/upload-video（multipart/form-data）。
+- 完成视频逐帧推理：上传视频保存到 backend/uploads/videos，逐帧 YOLO 推理并画框。
+- 完成结果视频导出：分析后视频保存到 backend/outputs/videos，并返回可访问 URL。
 - 完成检测服务层单例化模型加载，避免重复加载模型权重。
-- 完成业务规则：当 has_waste=true 时自动创建清理任务。
 - 完成任务调度模块：每 30 秒扫描待分配任务并自动分配给 cleaner。
 - 完成 FastAPI 主入口、v1 路由聚合与跨域配置。
 - 完成本地 MySQL 程序与实例分离部署（程序位于 D 盘，实例位于 instances/campus）。
-- 完成前端管理页面基础能力（Dashboard、任务管理、路由与 API 封装）。
+- 完成前端视频交互页面（视频上传、分析中加载提示、结果视频回放）。
 - 完成前端 Vite 启动基座（dev/build/preview 脚本可用）。
 
 ## 本地 MySQL 部署约定
@@ -48,73 +47,57 @@
 3. 启动前端服务：在 frontend 目录依次运行 npm install 与 npm run dev。
 4. 打开接口文档：访问 http://127.0.0.1:8000/docs。
 5. 打开前端页面：访问 http://localhost:5173。
-6. 以 multipart/form-data 调用检测上传接口。
-7. 在数据库中验证 detection_records 与 cleaning_tasks 的自动写入。
+6. 以 multipart/form-data 调用视频分析接口。
+7. 通过返回的 output_video_url 访问分析后视频。
 
-## 无人机模拟上传
+## 视频上传测试
 
-项目已提供模拟脚本 tools/simulate_uav_stream.py，可按固定间隔循环上传本地图片到检测接口。
+使用 curl 可直接测试视频分析接口：
 
 示例：
 
 ```bash
-python tools/simulate_uav_stream.py \
-	--image-dir ./tests/assets \
-	--interval 2 \
-	--drone-id 1 \
-	--lat 31.2304 \
-	--lng 121.4737 \
-	--api-url http://127.0.0.1:8000/api/v1/detections/upload
+curl -X POST "http://127.0.0.1:8000/api/v1/detections/upload-video" \
+	-F "file=@./tests/assets/demo.mp4"
 ```
 
-参数说明：
+返回字段：
 
-- --image-dir：图片目录（必填）
-- --interval：上传间隔秒数，默认 3
-- --drone-id：无人机 ID，默认 1
-- --lat：纬度，默认 31.2304
-- --lng：经度，默认 121.4737
-- --api-url：上传接口地址
-
-脚本会输出每次上传结果：是否检测到垃圾、置信度、是否生成清理任务。
+- output_video_url：分析结果视频访问路径
+- total_detections：全视频检测目标总数
+- processed_frames：处理帧数
 
 ## 检测上传接口（最新）
 
 - 请求方法：POST
-- 接口路径：/api/v1/detections/upload
+- 接口路径：/api/v1/detections/upload-video
 - Content-Type：multipart/form-data
 - 表单字段：
-	- file（必填，图片文件，支持 .jpg/.jpeg/.png/.bmp/.webp）
-	- drone_id（必填，int）
-	- latitude（必填，decimal）
-	- longitude（必填，decimal）
-- 返回结果：DetectionRecord；当 has_waste=true 时自动创建 CleaningTask（PENDING）。
+	- file（必填，视频文件，支持 .mp4/.avi）
+- 返回结果：视频分析摘要（output_video_url、total_detections、processed_frames）。
 
 示例请求：
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/api/v1/detections/upload" \
-	-F "file=@./tests/assets/drone_demo.jpg" \
-	-F "drone_id=1" \
-	-F "latitude=31.2304" \
-	-F "longitude=121.4737"
+curl -X POST "http://127.0.0.1:8000/api/v1/detections/upload-video" \
+	-F "file=@./tests/assets/demo.mp4"
 ```
 
 说明：
 
-- 上传成功后后端会返回 DetectionRecord。
-- 当 has_waste=true 时会自动创建 CleaningTask（PENDING）。
-- 图片保存路径为 backend/uploads，并可通过 /uploads 进行静态访问。
+- 上传视频保存路径：backend/uploads/videos。
+- 分析后视频输出路径：backend/outputs/videos。
+- 可通过 /outputs 前缀静态访问分析视频。
 
 ## 毕设演示脚本（建议流程）
 
 1. 展示系统架构：前端 Vue 3、后端 FastAPI、AI YOLO、MySQL。
 2. 启动后端与前端，打开 Dashboard 页面。
-3. 在 Dashboard 的“无人机巡检图片上传”卡片中上传图片并填写 drone_id、经纬度。
-4. 展示“AI 识别结果”卡片：图片、是否检测到垃圾、置信度、任务生成状态。
-5. 打开数据库表演示结果落库：detection_records 与 cleaning_tasks。
-6. 运行模拟脚本连续上传，展示系统持续处理能力。
-7. 总结闭环：无人机巡检 -> 图片上传 -> AI 识别 -> 自动派单 -> 前端可视化。
+3. 在 Dashboard 的“无人机巡检视频上传”卡片中上传 mp4/avi 视频。
+4. 等待“云端视频逐帧分析中，请稍候...”提示结束。
+5. 展示“视频分析结果”卡片：回放分析视频、总检测数、处理帧数。
+6. 访问 output_video_url，验证结果视频可单独播放。
+7. 总结闭环：无人机巡检视频 -> 视频上传 -> 逐帧 AI 识别 -> 输出视频 -> 前端回放。
 
 ## 模块文档索引
 

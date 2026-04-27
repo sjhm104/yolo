@@ -6,8 +6,8 @@
 
 ## 文档同步状态
 
-- 同步日期：2026-04-18
-- 当前实现：Dashboard 已接入上传与识别结果展示组件，任务页支持状态更新。
+- 同步日期：2026-04-27
+- 当前实现：Dashboard 已接入视频上传、云端分析中提示与结果视频回放组件。
 
 ## 目录说明
 
@@ -62,24 +62,28 @@ http://localhost:5173
 检测上传接口路径：
 
 ```text
-/api/v1/detections/upload
+/api/v1/detections/upload-video
 ```
 
 ## 页面闭环能力
 
 Dashboard 页面已接入完整闭环组件：
 
-- VideoUpload.vue：上传图片 + 填写 drone_id/latitude/longitude，调用 /detections/upload
-- DetectionResult.vue：展示识别图片、是否检测到垃圾、置信度、是否生成任务
+- VideoUpload.vue：上传 mp4/avi 视频，调用 /detections/upload-video
+- DetectionResult.vue：展示分析后视频回放、总检测目标数、处理帧数
 
-说明：后端返回 DetectionRecord 不含独立任务字段，页面根据 has_waste 展示“已生成/未生成任务”状态。
+上传组件行为：
 
-上传成功后，页面会自动显示最新 detection_record，并刷新统计卡片。
+- el-upload accept 已配置为 video/mp4,video/x-m4v,video/*
+- 分析期间显示 Loading：云端视频逐帧分析中，请稍候...
+- 分析结束后通过 video 标签展示后端返回的 output_video_url
+
+上传成功后，页面会自动显示最新视频分析结果，并刷新统计卡片。
 
 ## 毕设演示建议
 
 1. 进入 Dashboard，先展示统计卡片初始状态。
-2. 上传一张无垃圾图片，展示“未检测到垃圾/未生成任务”。
-3. 上传一张有垃圾图片，展示“检测到垃圾/已生成任务”。
-4. 结合后端数据库结果说明自动派单规则（has_waste=true 自动创建 cleaning_task）。
-5. 可配合 tools/simulate_uav_stream.py 做连续上传演示，体现实时性。
+2. 上传一段巡检视频（mp4/avi），展示分析中 Loading 提示。
+3. 分析完成后演示结果视频自动回放。
+4. 展示总检测目标数与处理帧数。
+5. 在浏览器直接访问 output_video_url，验证静态视频访问。

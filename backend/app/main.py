@@ -23,6 +23,10 @@ UPLOAD_DIR = Path(__file__).resolve().parents[1] / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
+OUTPUT_DIR = Path(__file__).resolve().parents[1] / "outputs"
+(OUTPUT_DIR / "videos").mkdir(parents=True, exist_ok=True)
+app.mount("/outputs", StaticFiles(directory=str(OUTPUT_DIR)), name="outputs")
+
 
 @app.on_event("startup")
 def on_startup() -> None:

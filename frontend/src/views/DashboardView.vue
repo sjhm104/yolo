@@ -2,7 +2,7 @@
   <section class="dashboard-page">
     <header class="page-header">
       <h2>校园垃圾检测数据大屏</h2>
-      <p>实时掌握巡检识别与处置任务进展</p>
+      <p>实时掌握巡检视频分析与处置任务进展</p>
     </header>
 
     <el-row :gutter="16">
@@ -26,7 +26,7 @@
         <VideoUpload @uploaded="handleUploaded" />
       </el-col>
       <el-col :xs="24" :lg="13">
-        <DetectionResult :record="latestRecord" />
+        <DetectionResult :record="latestVideoResult" />
       </el-col>
     </el-row>
   </section>
@@ -46,7 +46,7 @@ const stats = ref({
   pending_tasks: 0,
   completed_tasks: 0,
 });
-const latestRecord = ref(null);
+const latestVideoResult = ref(null);
 
 const statCards = computed(() => [
   {
@@ -84,8 +84,8 @@ const fetchStats = async () => {
   stats.value = data;
 };
 
-const handleUploaded = (record) => {
-  latestRecord.value = record;
+const handleUploaded = (result) => {
+  latestVideoResult.value = result;
   fetchStats();
 };
 

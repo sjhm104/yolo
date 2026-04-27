@@ -1,50 +1,44 @@
 <template>
-  <el-card class="upload-card" shadow="hover">
-    <template #header>
-      <div class="card-header">
-        <span>无人机巡检图片上传</span>
-        <el-tag type="info">multipart/form-data</el-tag>
-      </div>
-    </template>
+  <section
+    v-loading="processing"
+    element-loading-text="云端视频逐帧分析中，请稍候..."
+    class="upload-wrapper"
+  >
+    <el-card class="upload-card" shadow="hover">
+      <template #header>
+        <div class="card-header">
+          <span>无人机巡检视频上传</span>
+          <el-tag type="info">video/mp4, video/avi</el-tag>
+        </div>
+      </template>
 
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" class="upload-form">
-      <el-form-item label="无人机ID" prop="drone_id">
-        <el-input-number v-model="form.drone_id" :min="1" :step="1" controls-position="right" />
-      </el-form-item>
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" class="upload-form">
+        <el-form-item label="巡检视频" prop="file">
+          <el-upload
+            class="upload-box"
+            drag
+            :auto-upload="false"
+            :limit="1"
+            :on-change="handleFileChange"
+            :on-remove="handleFileRemove"
+            :file-list="fileList"
+            accept="video/mp4,video/x-m4v,video/*"
+          >
+            <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+            <div class="el-upload__text">拖拽视频到此处，或点击上传</div>
+            <template #tip>
+              <div class="el-upload__tip">仅支持 mp4/avi，单次 1 个视频文件</div>
+            </template>
+          </el-upload>
+        </el-form-item>
 
-      <el-form-item label="纬度" prop="latitude">
-        <el-input v-model="form.latitude" placeholder="例如 31.2304" />
-      </el-form-item>
-
-      <el-form-item label="经度" prop="longitude">
-        <el-input v-model="form.longitude" placeholder="例如 121.4737" />
-      </el-form-item>
-
-      <el-form-item label="巡检图片" prop="file">
-        <el-upload
-          class="upload-box"
-          drag
-          :auto-upload="false"
-          :limit="1"
-          :on-change="handleFileChange"
-          :on-remove="handleFileRemove"
-          :file-list="fileList"
-          accept="image/png,image/jpeg,image/jpg,image/bmp,image/webp"
-        >
-          <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-          <div class="el-upload__text">拖拽图片到此处，或点击上传</div>
-          <template #tip>
-            <div class="el-upload__tip">仅支持 jpg/jpeg/png/bmp/webp，单次 1 张</div>
-          </template>
-        </el-upload>
-      </el-form-item>
-
-      <el-form-item>
-        <el-button type="primary" :loading="submitting" @click="submitForm">上传并识别</el-button>
-        <el-button :disabled="submitting" @click="resetForm">重置</el-button>
-      </el-form-item>
-    </el-form>
-  </el-card>
+        <el-form-item>
+          <el-button type="primary" :loading="processing" @click="submitForm">上传并开始分析</el-button>
+          <el-button :disabled="processing" @click="resetForm">重置</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+  </section>
 </template>
 
 <script setup>
@@ -52,40 +46,20 @@ import { reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { UploadFilled } from "@element-plus/icons-vue";
 
-import { uploadDetection } from "../api/detection";
+import { uploadDetectionVideo } from "../api/detection";
 
 const emit = defineEmits(["uploaded"]);
 
 const formRef = ref();
-const submitting = ref(false);
+const processing = ref(false);
 const fileList = ref([]);
 
 const form = reactive({
-  drone_id: 1,
-  latitude: "31.2304",
-  longitude: "121.4737",
   file: null,
 });
 
-const validateCoordinate = (_rule, value, callback) => {
-  if (value === "" || value === null || value === undefined) {
-    callback(new Error("请输入坐标"));
-    return;
-  }
-
-  if (Number.isNaN(Number(value))) {
-    callback(new Error("坐标必须是数字"));
-    return;
-  }
-
-  callback();
-};
-
 const rules = {
-  drone_id: [{ required: true, message: "请输入无人机ID", trigger: "change" }],
-  latitude: [{ validator: validateCoordinate, trigger: "blur" }],
-  longitude: [{ validator: validateCoordinate, trigger: "blur" }],
-  file: [{ required: true, message: "请上传图片", trigger: "change" }],
+  file: [{ required: true, message: "请上传视频文件", trigger: "change" }],
 };
 
 const handleFileChange = (uploadFile, uploadFiles) => {
@@ -107,17 +81,14 @@ const submitForm = async () => {
 
   const payload = new FormData();
   payload.append("file", form.file);
-  payload.append("drone_id", String(form.drone_id));
-  payload.append("latitude", String(form.latitude));
-  payload.append("longitude", String(form.longitude));
 
-  submitting.value = true;
+  processing.value = true;
   try {
-    const { data } = await uploadDetection(payload);
-    ElMessage.success("上传成功，识别已完成");
+    const { data } = await uploadDetectionVideo(payload);
+    ElMessage.success("视频分析完成");
     emit("uploaded", data);
   } finally {
-    submitting.value = false;
+    processing.value = false;
   }
 };
 
@@ -131,6 +102,10 @@ const resetForm = () => {
 <style scoped>
 .upload-card {
   border: none;
+}
+
+.upload-wrapper {
+  min-height: 260px;
 }
 
 .card-header {

@@ -4,8 +4,8 @@
 
 ## 文档同步状态
 
-- 同步日期：2026-04-18
-- 当前实现：检测上传成功后写入 detection_records，检测到垃圾时自动创建 cleaning_tasks。
+- 同步日期：2026-04-27
+- 当前实现：系统保留 detection_records 与 cleaning_tasks 表结构；视频分析接口当前返回结果视频与统计摘要，不直接写入检测记录。
 
 ## 本地部署（程序与实例分离）
 
@@ -35,7 +35,7 @@
 
 当前业务闭环对应关系：
 
-- detection_records.has_waste=true -> 自动生成 cleaning_tasks（status=pending）
+- detection_records.has_waste=true -> 可生成 cleaning_tasks（status=pending）
 - cleaning_tasks.record_id -> 外键关联 detection_records.id
 
 ## 执行方式
@@ -73,10 +73,10 @@ D:/pysoft/mysql/mysql-8.4.8/mysql-8.4.8-winx64/bin/mysql.exe --user=root --passw
 
 ## 联调验证建议
 
-1. 调用 POST /api/v1/detections/upload 上传一张图片。
-2. 在 detection_records 表确认新增记录（image_url、latitude、longitude、has_waste、confidence）。
-3. 若 has_waste=true，在 cleaning_tasks 表确认新增一条 pending 任务。
-4. 调用 PATCH /api/v1/tasks/{task_id}/status 更新任务状态，验证 completed_time 写入。
+1. 调用 POST /api/v1/detections/upload-video 上传视频。
+2. 确认接口返回 output_video_url、total_detections、processed_frames。
+3. 调用 GET /api/v1/tasks/ 与 PATCH /api/v1/tasks/{task_id}/status，验证任务管理链路可用。
+4. 若需要验证 detection_records 与 cleaning_tasks 关系，可手动插入测试数据后执行下述 SQL 查询。
 
 常用 SQL：
 
