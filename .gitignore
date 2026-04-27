@@ -54,3 +54,16 @@ datasets/
 # Temp
 *.tmp
 *.temp
+
+# Runtime media artifacts (do not commit large generated files)
+backend/uploads/*
+!backend/uploads/.gitkeep
+!backend/uploads/videos/
+backend/uploads/videos/*
+!backend/uploads/videos/.gitkeep
+
+backend/outputs/*
+!backend/outputs/.gitkeep
+!backend/outputs/videos/
+backend/outputs/videos/*
+!backend/outputs/videos/.gitkeep

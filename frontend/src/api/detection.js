@@ -5,4 +5,5 @@ export const uploadDetectionVideo = (formData) =>
 		headers: {
 			"Content-Type": "multipart/form-data",
 		},
+		timeout: 0,
 	});
