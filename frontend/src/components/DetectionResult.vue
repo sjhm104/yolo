@@ -3,7 +3,9 @@
     <template #header>
       <div class="card-header">
         <span>视频分析结果</span>
-        <el-tag type="success">分析完成</el-tag>
+        <el-tag :type="record?.has_campus_waste ? 'danger' : 'success'">
+          {{ record?.has_campus_waste ? "发现校园垃圾" : "未发现校园垃圾" }}
+        </el-tag>
       </div>
     </template>
 
@@ -13,28 +15,62 @@
 
     <div v-else class="result-layout">
       <div class="video-wrap">
-        <video class="preview-video" controls autoplay :src="videoUrl"></video>
+        <video
+          class="preview-video"
+          controls
+          autoplay
+          playsinline
+          :key="videoUrl"
+          :src="videoUrl"
+          @error="onVideoError"
+          @loadeddata="onVideoLoaded"
+        ></video>
+        <div v-if="videoLoadFailed" class="video-fallback">
+          当前浏览器无法直接播放该编码视频。可点击下方链接打开：
+          <a :href="videoUrl" target="_blank" rel="noreferrer">{{ videoUrl }}</a>
+        </div>
       </div>
 
       <div class="info-wrap">
         <el-descriptions :column="1" border>
-          <el-descriptions-item label="总检测目标数">
-            {{ record.total_detections ?? 0 }}
+          <el-descriptions-item label="校园垃圾结论">
+            <el-tag :type="record.has_campus_waste ? 'danger' : 'success'" effect="dark">
+              {{ record.has_campus_waste ? "检测到校园垃圾" : "未检测到校园垃圾" }}
+            </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="处理帧数">
-            {{ record.processed_frames ?? 0 }}
+          <el-descriptions-item label="垃圾目标数量">
+            {{ record.garbage_count ?? 0 }}
           </el-descriptions-item>
-          <el-descriptions-item label="输出视频地址">
+          <el-descriptions-item label="结果视频地址">
             {{ record.output_video_url || "-" }}
           </el-descriptions-item>
         </el-descriptions>
+
+        <div class="class-summary" v-if="garbageSummary.length">
+          <p class="summary-title">垃圾类别统计</p>
+          <div class="summary-tags">
+            <el-tag
+              v-for="item in garbageSummary"
+              :key="item.class_name"
+              type="danger"
+              effect="light"
+            >
+              {{ item.class_name }}: {{ item.count }}
+            </el-tag>
+          </div>
+        </div>
+
+        <div class="class-summary" v-else>
+          <p class="summary-title">垃圾类别统计</p>
+          <el-tag type="success" effect="plain">未识别到垃圾类别</el-tag>
+        </div>
       </div>
     </div>
   </el-card>
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 
 const props = defineProps({
   record: {
@@ -63,6 +99,25 @@ const videoUrl = computed(() => {
 
   const relativePath = props.record.output_video_url.replace(/^\/+/, "");
   return `${apiOrigin}/${relativePath}`;
+});
+
+const videoLoadFailed = ref(false);
+
+watch(videoUrl, () => {
+  videoLoadFailed.value = false;
+});
+
+const onVideoError = () => {
+  videoLoadFailed.value = true;
+};
+
+const onVideoLoaded = () => {
+  videoLoadFailed.value = false;
+};
+
+const garbageSummary = computed(() => {
+  const summary = props.record?.garbage_summary;
+  return Array.isArray(summary) ? summary : [];
 });
 </script>
 
@@ -100,6 +155,36 @@ const videoUrl = computed(() => {
   width: 100%;
   height: 300px;
   display: block;
+}
+
+.video-fallback {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #fde68a;
+  background: #1f2937;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.video-fallback a {
+  color: #93c5fd;
+  word-break: break-all;
+}
+
+.class-summary {
+  margin-top: 14px;
+}
+
+.summary-title {
+  margin: 0 0 8px;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.summary-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 @media (min-width: 992px) {

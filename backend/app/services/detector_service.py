@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from collections import Counter
 from pathlib import Path
 from uuid import uuid4
 
@@ -16,6 +17,21 @@ from ai.models.yolo.infer import GarbageDetector
 
 detector = GarbageDetector()
 
+# COCO 中可近似视为校园垃圾相关的类别（按项目口径可继续扩展）
+GARBAGE_CLASS_NAMES = {
+	"bottle",
+	"cup",
+	"bowl",
+	"banana",
+	"apple",
+	"orange",
+	"sandwich",
+	"hot dog",
+	"pizza",
+	"donut",
+	"cake",
+}
+
 
 UPLOAD_VIDEOS_DIR = Path(__file__).resolve().parents[2] / "uploads" / "videos"
 OUTPUT_VIDEOS_DIR = Path(__file__).resolve().parents[2] / "outputs" / "videos"
@@ -28,6 +44,22 @@ def ensure_video_dirs() -> None:
 
 def _build_output_path(input_video_path: Path) -> Path:
 	return OUTPUT_VIDEOS_DIR / f"{input_video_path.stem}_{uuid4().hex}.mp4"
+
+
+def _create_video_writer(output_path: Path, fps: float, width: int, height: int) -> cv2.VideoWriter:
+	# 浏览器兼容优先：H.264(avc1/H264) -> mp4v 回退
+	for codec in ("avc1", "H264", "mp4v"):
+		writer = cv2.VideoWriter(
+			str(output_path),
+			cv2.VideoWriter_fourcc(*codec),
+			fps,
+			(width, height),
+		)
+		if writer.isOpened():
+			return writer
+		del writer
+
+	raise ValueError("无法创建输出视频编码器")
 
 
 def process_uploaded_video(input_video_path: str) -> dict[str, object]:
@@ -53,14 +85,11 @@ def process_uploaded_video(input_video_path: str) -> dict[str, object]:
 		raise ValueError("视频分辨率异常")
 
 	output_path = _build_output_path(source)
-	fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-	writer = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
-	if not writer.isOpened():
-		cap.release()
-		raise ValueError("无法写入输出视频")
+	writer = _create_video_writer(output_path, fps, width, height)
 
 	total_detections = 0
 	processed_frames = 0
+	class_counter: Counter[str] = Counter()
 
 	try:
 		while True:
@@ -77,7 +106,11 @@ def process_uploaded_video(input_video_path: str) -> dict[str, object]:
 				result = results[0]
 				boxes = getattr(result, "boxes", None)
 				if boxes is not None:
-					total_detections += len(boxes)
+					cls_values = [int(cls_id) for cls_id in boxes.cls.tolist()] if boxes.cls is not None else []
+					total_detections += len(cls_values)
+					for class_id in cls_values:
+						class_name = detector._resolve_class_name(result.names, class_id)
+						class_counter[class_name] += 1
 				annotated_frame = result.plot()
 			else:
 				annotated_frame = frame
@@ -93,10 +126,33 @@ def process_uploaded_video(input_video_path: str) -> dict[str, object]:
 			output_path.unlink()
 		raise ValueError("视频没有可处理的帧")
 
+	if not output_path.exists() or output_path.stat().st_size == 0:
+		raise ValueError("输出视频生成失败")
+
+	garbage_counter = Counter(
+		{
+			name: count
+			for name, count in class_counter.items()
+			if name in GARBAGE_CLASS_NAMES
+		}
+	)
+	garbage_count = int(sum(garbage_counter.values()))
+	has_campus_waste = garbage_count > 0
+
 	return {
 		"output_video_relpath": f"outputs/videos/{output_path.name}",
 		"total_detections": total_detections,
 		"processed_frames": processed_frames,
+		"has_campus_waste": has_campus_waste,
+		"garbage_count": garbage_count,
+		"garbage_summary": [
+			{"class_name": class_name, "count": count}
+			for class_name, count in garbage_counter.most_common()
+		],
+		"class_summary": [
+			{"class_name": class_name, "count": count}
+			for class_name, count in class_counter.most_common()
+		],
 	}
 
 

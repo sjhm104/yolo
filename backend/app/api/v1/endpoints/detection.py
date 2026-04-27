@@ -20,8 +20,10 @@ ALLOWED_VIDEO_EXTENSIONS = get_allowed_video_extensions()
 
 class VideoDetectionResponse(BaseModel):
 	output_video_url: str
-	total_detections: int
-	processed_frames: int
+	has_campus_waste: bool
+	garbage_count: int
+	garbage_summary: list[dict[str, object]]
+	class_summary: list[dict[str, object]]
 
 
 def _validate_video_upload(file: UploadFile) -> str:
@@ -72,6 +74,8 @@ async def upload_and_detect_video(file: UploadFile = File(...)) -> VideoDetectio
 	output_video_relpath = str(result["output_video_relpath"])
 	return VideoDetectionResponse(
 		output_video_url=f"/{output_video_relpath}",
-		total_detections=int(result["total_detections"]),
-		processed_frames=int(result["processed_frames"]),
+		has_campus_waste=bool(result.get("has_campus_waste", False)),
+		garbage_count=int(result.get("garbage_count", 0)),
+		garbage_summary=list(result.get("garbage_summary", [])),
+		class_summary=list(result.get("class_summary", [])),
 	)

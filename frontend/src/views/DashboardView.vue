@@ -80,8 +80,12 @@ const statCards = computed(() => [
 ]);
 
 const fetchStats = async () => {
-  const { data } = await getStats();
-  stats.value = data;
+  try {
+    const { data } = await getStats();
+    stats.value = data;
+  } catch {
+    // 后端短暂不可用时静默容错，避免频繁打断用户
+  }
 };
 
 const handleUploaded = (result) => {

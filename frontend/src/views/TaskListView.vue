@@ -102,6 +102,8 @@ const fetchTasks = async () => {
   try {
     const { data } = await getTaskList({ skip: 0, limit: 100 });
     tasks.value = data;
+  } catch {
+    // 后端短暂不可用时静默容错，避免频繁打断用户
   } finally {
     loading.value = false;
   }

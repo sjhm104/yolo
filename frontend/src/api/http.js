@@ -3,12 +3,16 @@ import { ElMessage } from "element-plus";
 
 const http = axios.create({
 	baseURL: import.meta.env.VITE_API_BASE_URL,
-	timeout: 15000,
+	timeout: 0,
 });
 
 http.interceptors.response.use(
 	(response) => response,
 	(error) => {
+		if (error?.config?.skipGlobalError) {
+			return Promise.reject(error);
+		}
+
 		if (!error?.response) {
 			const offlineMessage =
 				error?.code === "ECONNABORTED"
