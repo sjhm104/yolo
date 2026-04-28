@@ -65,7 +65,7 @@ $backendCommand = @"
 Set-Location '$backendDir'
 & '$condaExe' run -n $CondaEnv python -m pip install --upgrade pip
 & '$condaExe' run -n $CondaEnv python -m pip install -r '$backendDir\requirements.txt'
-& '$condaExe' run -n $CondaEnv python -m uvicorn app.main:app --reload --host 0.0.0.0 --port $BackendPort
+& '$condaExe' run -n $CondaEnv python -m uvicorn app.main:app --reload --reload-exclude "uploads/*" --reload-exclude "outputs/*" --reload-exclude "tools/*" --host 0.0.0.0 --port $BackendPort
 "@
 
 $frontendCommand = @"

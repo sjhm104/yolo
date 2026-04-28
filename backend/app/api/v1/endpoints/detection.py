@@ -3,38 +3,34 @@ from __future__ import annotations
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.concurrency import run_in_threadpool
-from pydantic import AnyHttpUrl, BaseModel
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 
+from app.db.session import SessionLocal
+from app.schemas.detection import VideoAnalyzeRequest, VideoAnalyzeResponse
 from app.services.detector_service import (
-	get_allowed_video_extensions,
-	process_video_from_url,
-	process_uploaded_video,
+	UPLOAD_VIDEOS_DIR,
+	analyze_cloud_video_background,
+	analyze_video_background,
+	ensure_video_dirs,
 )
 
+
 router = APIRouter()
-
-UPLOAD_VIDEO_DIR = Path(__file__).resolve().parents[4] / "uploads" / "videos"
-ALLOWED_VIDEO_EXTENSIONS = get_allowed_video_extensions()
-
-
-class VideoDetectionResponse(BaseModel):
-	output_video_url: str
-	has_campus_waste: bool
-	garbage_count: int
-	garbage_summary: list[dict[str, object]]
-	class_summary: list[dict[str, object]]
+PROJECT_ROOT = Path(__file__).resolve().parents[5]
+ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv"}
 
 
-class VideoUrlAnalyzeRequest(BaseModel):
-	video_url: AnyHttpUrl
+def _resolve_video_path(video_path: str) -> Path:
+	candidate = Path(video_path)
+	if not candidate.is_absolute():
+		candidate = PROJECT_ROOT / candidate
+	return candidate.resolve()
 
 
 def _validate_video_upload(file: UploadFile) -> str:
 	suffix = Path(file.filename or "").suffix.lower()
 	if suffix not in ALLOWED_VIDEO_EXTENSIONS:
-		raise HTTPException(status_code=400, detail="仅支持 .mp4 或 .avi 视频")
+		raise HTTPException(status_code=400, detail="仅支持 mp4/avi/mov/mkv 视频")
 
 	content_type = (file.content_type or "").lower()
 	if content_type and not content_type.startswith("video/"):
@@ -44,10 +40,9 @@ def _validate_video_upload(file: UploadFile) -> str:
 
 
 async def _save_uploaded_video(file: UploadFile, suffix: str) -> Path:
-	UPLOAD_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
-
+	ensure_video_dirs()
 	filename = f"{uuid4().hex}{suffix}"
-	saved_path = UPLOAD_VIDEO_DIR / filename
+	saved_path = UPLOAD_VIDEOS_DIR / filename
 
 	try:
 		with saved_path.open("wb") as out_file:
@@ -56,48 +51,72 @@ async def _save_uploaded_video(file: UploadFile, suffix: str) -> Path:
 				if not chunk:
 					break
 				out_file.write(chunk)
-	except OSError as exc:
-		raise HTTPException(status_code=500, detail="视频保存失败") from exc
 	finally:
 		await file.close()
 
 	return saved_path
 
 
-@router.post("/upload-video", response_model=VideoDetectionResponse, status_code=201)
-async def upload_and_detect_video(file: UploadFile = File(...)) -> VideoDetectionResponse:
+@router.post("/analyze", response_model=VideoAnalyzeResponse)
+async def analyze_video(
+	payload: VideoAnalyzeRequest,
+	background_tasks: BackgroundTasks,
+) -> VideoAnalyzeResponse:
+	if payload.video_path:
+		resolved_path = _resolve_video_path(payload.video_path)
+		if not resolved_path.exists() or not resolved_path.is_file():
+			raise HTTPException(status_code=404, detail="视频文件不存在")
+
+		background_tasks.add_task(
+			analyze_video_background,
+			str(resolved_path),
+			SessionLocal,
+			str(payload.video_path),
+		)
+		return VideoAnalyzeResponse(message="本地视频分析已在后台启动")
+
+	background_tasks.add_task(
+		analyze_cloud_video_background,
+		str(payload.video_url),
+		SessionLocal,
+		payload.download_headers,
+		payload.download_timeout,
+		payload.download_retries,
+	)
+	return VideoAnalyzeResponse(message="云端视频分析已在后台启动")
+
+
+@router.post("/upload-video", response_model=VideoAnalyzeResponse, status_code=201)
+async def upload_video(
+	background_tasks: BackgroundTasks,
+	file: UploadFile = File(...),
+) -> VideoAnalyzeResponse:
 	suffix = _validate_video_upload(file)
 	saved_path = await _save_uploaded_video(file, suffix)
 
-	try:
-		result = await run_in_threadpool(process_uploaded_video, str(saved_path))
-	except Exception as exc:
-		if saved_path.exists():
-			saved_path.unlink()
-		raise HTTPException(status_code=500, detail="视频推理失败") from exc
-
-	output_video_relpath = str(result["output_video_relpath"])
-	return VideoDetectionResponse(
-		output_video_url=f"/{output_video_relpath}",
-		has_campus_waste=bool(result.get("has_campus_waste", False)),
-		garbage_count=int(result.get("garbage_count", 0)),
-		garbage_summary=list(result.get("garbage_summary", [])),
-		class_summary=list(result.get("class_summary", [])),
+	background_tasks.add_task(
+		analyze_video_background,
+		str(saved_path),
+		SessionLocal,
+		file.filename or saved_path.name,
 	)
+	return VideoAnalyzeResponse(message="本地上传视频分析已在后台启动")
 
 
-@router.post("/analyze-video-url", response_model=VideoDetectionResponse, status_code=201)
-async def analyze_cloud_video(payload: VideoUrlAnalyzeRequest) -> VideoDetectionResponse:
-	try:
-		result = await run_in_threadpool(process_video_from_url, str(payload.video_url))
-	except Exception as exc:
-		raise HTTPException(status_code=500, detail="云端视频推理失败") from exc
+@router.post("/analyze-video-url", response_model=VideoAnalyzeResponse)
+async def analyze_video_url(
+	payload: VideoAnalyzeRequest,
+	background_tasks: BackgroundTasks,
+) -> VideoAnalyzeResponse:
+	if not payload.video_url:
+		raise HTTPException(status_code=400, detail="请提供 video_url")
 
-	output_video_relpath = str(result["output_video_relpath"])
-	return VideoDetectionResponse(
-		output_video_url=f"/{output_video_relpath}",
-		has_campus_waste=bool(result.get("has_campus_waste", False)),
-		garbage_count=int(result.get("garbage_count", 0)),
-		garbage_summary=list(result.get("garbage_summary", [])),
-		class_summary=list(result.get("class_summary", [])),
+	background_tasks.add_task(
+		analyze_cloud_video_background,
+		str(payload.video_url),
+		SessionLocal,
+		payload.download_headers,
+		payload.download_timeout,
+		payload.download_retries,
 	)
+	return VideoAnalyzeResponse(message="云端视频分析已在后台启动")

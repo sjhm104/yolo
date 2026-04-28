@@ -1,14 +1,14 @@
 <template>
   <section
     v-loading="processing"
-    element-loading-text="云端视频逐帧分析中，请稍候..."
+    element-loading-text="视频后台分析任务启动中，请稍候..."
     class="upload-wrapper"
   >
     <el-card class="upload-card" shadow="hover">
       <template #header>
         <div class="card-header">
           <span>无人机巡检视频分析</span>
-          <el-tag type="info">video/mp4, video/avi</el-tag>
+          <el-tag type="info">video/mp4, video/avi, video/mov, video/mkv</el-tag>
         </div>
       </template>
 
@@ -27,18 +27,18 @@
             :on-change="handleFileChange"
             :on-remove="handleFileRemove"
             :file-list="fileList"
-            accept="video/mp4,video/x-m4v,video/*"
+            accept="video/mp4,video/x-m4v,video/quicktime,video/x-msvideo,video/*"
           >
             <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
             <div class="el-upload__text">拖拽视频到此处，或点击上传</div>
             <template #tip>
-              <div class="el-upload__tip">仅支持 mp4/avi，单次 1 个视频文件</div>
+              <div class="el-upload__tip">支持 mp4/avi/mov/mkv，单次 1 个视频文件</div>
             </template>
           </el-upload>
         </el-form-item>
 
         <el-form-item v-else label="视频地址" prop="video_url">
-          <el-input v-model="form.video_url" placeholder="请输入可公网访问的 mp4/avi 视频 URL" clearable />
+          <el-input v-model="form.video_url" placeholder="请输入可公网访问的视频 URL" clearable />
         </el-form-item>
 
         <el-form-item>
@@ -102,7 +102,7 @@ const submitForm = async () => {
       data = resp.data;
     }
 
-    ElMessage.success("视频分析完成");
+    ElMessage.success(data?.message || "视频正在后台分析中");
     emit("uploaded", data);
   } finally {
     processing.value = false;

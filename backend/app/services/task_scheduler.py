@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import Optional, Protocol
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.db.base import CleaningTask, CleaningTaskStatus, User, UserRole
+from app.db.base import CleaningTask, CleaningTaskStatus, Worker
 from app.db.session import SessionLocal
 
 
@@ -18,30 +17,25 @@ SCHEDULER_JOB_ID = "assign_pending_cleaning_tasks"
 SCHEDULER_INTERVAL_SECONDS = 30
 
 
-class CleanerSelectionStrategy(Protocol):
-	"""清洁人员选择策略接口，后续可扩展为距离/负载等复杂策略。"""
+class WorkerSelectionStrategy(Protocol):
+	"""环卫工人选择策略接口，后续可扩展为距离/负载等复杂策略。"""
 
-	def select_cleaner(self, db: Session) -> Optional[User]:
+	def select_worker(self, db: Session) -> Optional[Worker]:
 		...
 
 
-class FirstAvailableCleanerStrategy:
-	"""简单策略：选择第一个 cleaner 角色用户。"""
+class FirstAvailableWorkerStrategy:
+	"""简单策略：选择第一个可用环卫工人。"""
 
-	def select_cleaner(self, db: Session) -> Optional[User]:
-		return (
-			db.query(User)
-			.filter(User.role == UserRole.CLEANER)
-			.order_by(User.id.asc())
-			.first()
-		)
+	def select_worker(self, db: Session) -> Optional[Worker]:
+		return db.query(Worker).order_by(Worker.id.asc()).first()
 
 
 class TaskSchedulerService:
-	"""定时扫描待分配任务并执行分配。"""
+	"""定时扫描待分配任务并自动指派环卫工人。"""
 
-	def __init__(self, strategy: CleanerSelectionStrategy | None = None) -> None:
-		self.strategy = strategy or FirstAvailableCleanerStrategy()
+	def __init__(self, strategy: WorkerSelectionStrategy | None = None) -> None:
+		self.strategy = strategy or FirstAvailableWorkerStrategy()
 		self.scheduler = BackgroundScheduler()
 
 	def start(self) -> None:
@@ -71,9 +65,9 @@ class TaskSchedulerService:
 	def assign_pending_tasks(self) -> None:
 		db = SessionLocal()
 		try:
-			cleaner = self.strategy.select_cleaner(db)
-			if cleaner is None:
-				logger.warning("未找到可分配的 cleaner 用户，任务分配跳过")
+			worker = self.strategy.select_worker(db)
+			if worker is None:
+				logger.warning("未找到可分配的环卫工人，任务分配跳过")
 				return
 
 			pending_task_ids = [
@@ -82,7 +76,7 @@ class TaskSchedulerService:
 					db.query(CleaningTask.id)
 					.filter(
 						CleaningTask.status == CleaningTaskStatus.PENDING,
-						CleaningTask.cleaner_id.is_(None),
+						CleaningTask.worker_id.is_(None),
 					)
 					.order_by(CleaningTask.created_at.asc())
 					.all()
@@ -94,22 +88,18 @@ class TaskSchedulerService:
 				return
 
 			assigned_count = 0
-			now = datetime.utcnow()
 
 			for task_id in pending_task_ids:
-				# 条件更新避免重复分配（防止并发下重复写入）
 				updated_rows = (
 					db.query(CleaningTask)
 					.filter(
 						CleaningTask.id == task_id,
 						CleaningTask.status == CleaningTaskStatus.PENDING,
-						CleaningTask.cleaner_id.is_(None),
+						CleaningTask.worker_id.is_(None),
 					)
 					.update(
 						{
-							CleaningTask.cleaner_id: cleaner.id,
-							CleaningTask.status: CleaningTaskStatus.ASSIGNED,
-							CleaningTask.assigned_time: now,
+							CleaningTask.worker_id: worker.id,
 						},
 						synchronize_session=False,
 					)
@@ -120,8 +110,8 @@ class TaskSchedulerService:
 			db.commit()
 			if assigned_count:
 				logger.info(
-					"任务调度完成：cleaner_id=%s，本轮分配 %s 条任务",
-					cleaner.id,
+					"任务调度完成：worker_id=%s，本轮分配 %s 条任务",
+					worker.id,
 					assigned_count,
 				)
 		except SQLAlchemyError:

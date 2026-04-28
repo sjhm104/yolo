@@ -9,12 +9,12 @@
       <el-table :data="tasks" v-loading="loading" stripe style="width: 100%">
         <el-table-column prop="id" label="任务ID" width="90" />
 
-        <el-table-column label="无人机图片" width="130">
+        <el-table-column label="抓拍图片" width="130">
           <template #default="{ row }">
             <el-image
               class="thumb"
-              :src="resolveImageUrl(row?.detection_record?.image_url)"
-              :preview-src-list="[resolveImageUrl(row?.detection_record?.image_url)]"
+              :src="resolveImageUrl(row?.record?.screenshot_url)"
+              :preview-src-list="[resolveImageUrl(row?.record?.screenshot_url)]"
               preview-teleported
               fit="cover"
             >
@@ -25,10 +25,34 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="经纬度" min-width="190">
+        <el-table-column prop="record.frame_time" label="视频时间戳" width="140">
           <template #default="{ row }">
-            <div>纬度: {{ row?.detection_record?.latitude }}</div>
-            <div>经度: {{ row?.detection_record?.longitude }}</div>
+            {{ row?.record?.frame_time || "-" }}
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="record.video_source" label="视频源" min-width="180">
+          <template #default="{ row }">
+            {{ row?.record?.video_source || "-" }}
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="worker.name" label="指派给" min-width="180">
+          <template #default="{ row }">
+            <el-select
+              :model-value="row.worker_id"
+              placeholder="选择环卫工人"
+              clearable
+              filterable
+              @change="(value) => handleAssign(row.id, value)"
+            >
+              <el-option
+                v-for="worker in workers"
+                :key="worker.id"
+                :label="`${worker.name} (${worker.phone})`"
+                :value="worker.id"
+              />
+            </el-select>
           </template>
         </el-table-column>
 
@@ -52,7 +76,7 @@
               size="small"
               @click="markCompleted(row.id)"
             >
-              标记为已完成
+              标记完成
             </el-button>
             <span v-else class="done-text">已完成</span>
           </template>
@@ -63,13 +87,15 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
+import { onMounted, onBeforeUnmount, ref } from "vue";
 import { ElMessage } from "element-plus";
 
-import { getTaskList, updateTaskStatus } from "../api";
+import { assignTaskWorker, completeTask, getTaskList, getWorkerList } from "../api";
 
 const loading = ref(false);
 const tasks = ref([]);
+const workers = ref([]);
+let refreshTimer = null;
 
 const resolveImageUrl = (path) => {
   if (!path) return "";
@@ -82,13 +108,11 @@ const resolveImageUrl = (path) => {
 
 const statusType = (status) => {
   if (status === "completed") return "success";
-  if (status === "assigned") return "danger";
   return "warning";
 };
 
 const statusText = (status) => {
   if (status === "completed") return "已完成";
-  if (status === "assigned") return "处理中";
   return "待处理";
 };
 
@@ -109,13 +133,41 @@ const fetchTasks = async () => {
   }
 };
 
+const fetchWorkers = async () => {
+  try {
+    const { data } = await getWorkerList();
+    workers.value = data;
+  } catch {
+    // 后端短暂不可用时静默容错，避免频繁打断用户
+  }
+};
+
+const handleAssign = async (taskId, workerId) => {
+  if (!workerId) return;
+  await assignTaskWorker(taskId, workerId);
+  ElMessage.success("任务指派已更新");
+  await fetchTasks();
+};
+
 const markCompleted = async (taskId) => {
-  await updateTaskStatus(taskId, "completed");
+  await completeTask(taskId);
   ElMessage.success("任务已更新为完成");
   await fetchTasks();
 };
 
+onMounted(fetchWorkers);
 onMounted(fetchTasks);
+onMounted(() => {
+  refreshTimer = window.setInterval(() => {
+    fetchTasks();
+  }, 3000);
+});
+
+onBeforeUnmount(() => {
+  if (refreshTimer) {
+    window.clearInterval(refreshTimer);
+  }
+});
 </script>
 
 <style scoped>

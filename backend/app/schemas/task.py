@@ -1,35 +1,25 @@
 from datetime import datetime
-from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.db.base import CleaningTaskStatus
+from app.schemas.detection import DetectionRecordResponse
+from app.schemas.worker import WorkerResponse
 
 
-class CleaningTaskUpdate(BaseModel):
-    status: Optional[CleaningTaskStatus] = None
-    cleaner_id: Optional[int] = None
-
-
-class DetectionRecordBrief(BaseModel):
-    image_url: str
-    latitude: Decimal
-    longitude: Decimal
-    detected_time: datetime
-
-    model_config = ConfigDict(from_attributes=True)
+class CleaningTaskAssignRequest(BaseModel):
+	worker_id: int
 
 
 class CleaningTaskResponse(BaseModel):
-    id: int
-    record_id: int
-    cleaner_id: Optional[int] = None
-    status: CleaningTaskStatus
-    assigned_time: Optional[datetime] = None
-    completed_time: Optional[datetime] = None
-    created_at: datetime
-    updated_at: datetime
-    detection_record: DetectionRecordBrief = Field(validation_alias="record")
+	id: int
+	record_id: int
+	worker_id: Optional[int] = None
+	status: CleaningTaskStatus
+	created_at: datetime
+	completed_at: Optional[datetime] = None
+	record: DetectionRecordResponse
+	worker: Optional[WorkerResponse] = None
 
-    model_config = ConfigDict(from_attributes=True)
+	model_config = ConfigDict(from_attributes=True)

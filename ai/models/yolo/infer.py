@@ -1,73 +1,89 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+import os
+import time
 
+import cv2
 from ultralytics import YOLO
 
 
-class GarbageDetector:
-	"""基于 Ultralytics YOLO 的垃圾目标检测器。"""
+class GarbageVideoDetector:
+	"""基于 YOLOv8 的视频流垃圾检测器。"""
 
 	def __init__(self, model_path: str = "yolov8n.pt", conf_threshold: float = 0.25) -> None:
 		self.model_path = model_path
 		self.conf_threshold = conf_threshold
+		# Ultralytics 会在本地不存在时自动下载预训练权重。
 		self.model = YOLO(model_path)
 
 	@staticmethod
-	def _resolve_class_name(names: Any, class_id: int) -> str:
-		if isinstance(names, dict):
-			return str(names.get(class_id, class_id))
-		if isinstance(names, (list, tuple)) and 0 <= class_id < len(names):
-			return str(names[class_id])
-		return str(class_id)
+	def _format_frame_time(seconds: float) -> str:
+		total_seconds = max(0, int(seconds))
+		hours = total_seconds // 3600
+		minutes = (total_seconds % 3600) // 60
+		secs = total_seconds % 60
 
-	def predict(self, image_path: str) -> dict[str, Any]:
-		image = Path(image_path)
-		if not image.exists():
-			raise FileNotFoundError(f"图片不存在: {image_path}")
+		if hours > 0:
+			return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+		return f"{minutes:02d}:{secs:02d}"
 
-		results = self.model.predict(
-			source=str(image),
-			conf=self.conf_threshold,
-			verbose=False,
-		)
-		if not results:
-			return {
-				"has_waste": False,
-				"max_confidence": 0.0,
-				"bboxes": [],
-			}
+	def process_video_stream(self, video_path: str, output_dir: str):
+		os.makedirs(output_dir, exist_ok=True)
 
-		result = results[0]
-		boxes = getattr(result, "boxes", None)
-		names = getattr(result, "names", {})
+		cap = cv2.VideoCapture(video_path)
+		if not cap.isOpened():
+			raise ValueError(f"无法打开视频文件: {video_path}")
 
-		bboxes: list[dict[str, Any]] = []
-		max_confidence = 0.0
+		frame_index = 0
+		frame_interval = 30
+		fps = cap.get(cv2.CAP_PROP_FPS)
+		if not fps or fps <= 0:
+			fps = 30.0
 
-		if boxes is not None:
-			for box in boxes:
-				coords = box.xyxy[0].tolist()
-				confidence = float(box.conf.item()) if box.conf is not None else 0.0
-				class_id = int(box.cls.item()) if box.cls is not None else -1
-				class_name = self._resolve_class_name(names, class_id)
+		try:
+			while True:
+				success, frame = cap.read()
+				if not success:
+					break
 
-				max_confidence = max(max_confidence, confidence)
-				bboxes.append(
-					{
-						"class_id": class_id,
-						"class_name": class_name,
-						"confidence": confidence,
-						"x1": float(coords[0]),
-						"y1": float(coords[1]),
-						"x2": float(coords[2]),
-						"y2": float(coords[3]),
-					}
+				if frame_index % frame_interval != 0:
+					frame_index += 1
+					continue
+
+				results = self.model.predict(
+					source=frame,
+					conf=self.conf_threshold,
+					verbose=False,
 				)
 
-		return {
-			"has_waste": len(bboxes) > 0,
-			"max_confidence": max_confidence,
-			"bboxes": bboxes,
-		}
+				if results:
+					result = results[0]
+					boxes = getattr(result, "boxes", None)
+
+					if boxes is not None and len(boxes) > 0:
+						confidences = boxes.conf.tolist() if boxes.conf is not None else []
+						max_confidence = max((float(conf) for conf in confidences), default=0.0)
+
+						frame_time_seconds = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+						if frame_time_seconds <= 0:
+							frame_time_seconds = frame_index / fps
+
+						frame_time = self._format_frame_time(frame_time_seconds)
+						file_name = (
+							f"waste_{frame_time.replace(':', '-')}_{int(time.time() * 1000)}.jpg"
+						)
+						saved_path = os.path.join(output_dir, file_name)
+
+						annotated_frame = result.plot()
+						cv2.imwrite(saved_path, annotated_frame)
+
+						yield {
+							"frame_time": frame_time,
+							"screenshot_url": os.path.relpath(saved_path),
+							"has_waste": True,
+							"confidence": max_confidence,
+						}
+
+				frame_index += 1
+		finally:
+			cap.release()

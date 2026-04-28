@@ -28,6 +28,25 @@
           </el-col>
         </el-row>
 
+        <el-card class="console-card" shadow="hover">
+          <template #header>
+            <div class="section-header">
+              <span>视频分析控制台</span>
+            </div>
+          </template>
+
+          <div class="console-form">
+            <el-input
+              v-model="videoPath"
+              placeholder="请输入本地测试视频路径，例如 backend/uploads/videos/demo.mp4"
+              clearable
+            />
+            <el-button type="primary" :loading="analyzeLoading" @click="handleAnalyze">
+              启动视频检测
+            </el-button>
+          </div>
+        </el-card>
+
         <el-card class="task-card" shadow="hover">
           <template #header>
             <div class="section-header">
@@ -50,12 +69,16 @@
 
               <div class="task-item-body">
                 <div class="task-field">
-                  <span class="field-label">坐标</span>
-                  <span class="field-value">{{ task?.detection_record?.latitude }}, {{ task?.detection_record?.longitude }}</span>
+                  <span class="field-label">视频时间戳</span>
+                  <span class="field-value">{{ task?.record?.frame_time || "-" }}</span>
                 </div>
                 <div class="task-field">
-                  <span class="field-label">关联检测</span>
-                  <span class="field-value ellipsis">{{ task?.detection_record?.image_url || '-' }}</span>
+                  <span class="field-label">视频来源</span>
+                  <span class="field-value ellipsis">{{ task?.record?.video_source || "-" }}</span>
+                </div>
+                <div class="task-field">
+                  <span class="field-label">抓拍图片</span>
+                  <span class="field-value ellipsis">{{ task?.record?.screenshot_url || "-" }}</span>
                 </div>
               </div>
             </el-card>
@@ -68,9 +91,10 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref } from "vue";
+import { ElMessage } from "element-plus";
 import { Aim, CircleCheck, Clock, DataLine } from "@element-plus/icons-vue";
 
-import { getStats, getTaskList } from "../api";
+import { getStats, getTaskList, startVideoAnalysis } from "../api";
 import DetectionResult from "../components/DetectionResult.vue";
 import VideoUpload from "../components/VideoUpload.vue";
 
@@ -83,6 +107,8 @@ const stats = ref({
 const latestVideoResult = ref(null);
 const tasks = ref([]);
 const tasksLoading = ref(false);
+const analyzeLoading = ref(false);
+const videoPath = ref("");
 let refreshTimer = null;
 
 const statCards = computed(() => [
@@ -137,15 +163,30 @@ const fetchTasks = async () => {
   }
 };
 
+const handleAnalyze = async () => {
+  if (!videoPath.value.trim()) {
+    ElMessage.warning("请输入本地测试视频路径");
+    return;
+  }
+
+  analyzeLoading.value = true;
+  try {
+    await startVideoAnalysis(videoPath.value.trim());
+    ElMessage.success("视频正在后台分析中");
+    await fetchStats();
+    await fetchTasks();
+  } finally {
+    analyzeLoading.value = false;
+  }
+};
+
 const statusType = (status) => {
   if (status === "completed") return "success";
-  if (status === "assigned") return "danger";
   return "warning";
 };
 
 const statusText = (status) => {
   if (status === "completed") return "已完成";
-  if (status === "assigned") return "处理中";
   return "待处理";
 };
 
@@ -155,7 +196,9 @@ const formatTime = (value) => {
 };
 
 const handleUploaded = (result) => {
-  latestVideoResult.value = result;
+  if (result?.output_video_url) {
+    latestVideoResult.value = result;
+  }
   fetchStats();
   fetchTasks();
 };
@@ -166,7 +209,7 @@ onMounted(() => {
   refreshTimer = window.setInterval(() => {
     fetchStats();
     fetchTasks();
-  }, 10000);
+  }, 3000);
 });
 
 onBeforeUnmount(() => {
@@ -224,8 +267,18 @@ onBeforeUnmount(() => {
   border: none;
 }
 
+.console-card,
 .task-card {
   border: none;
+}
+
+.console-form {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.task-card {
   flex: 1;
 }
 
@@ -233,7 +286,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 520px;
+  min-height: 420px;
 }
 
 .task-item {
@@ -357,6 +410,11 @@ onBeforeUnmount(() => {
 @media (max-width: 992px) {
   .right-panel {
     margin-top: 16px;
+  }
+
+  .console-form {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .ellipsis {
