@@ -5,4 +5,6 @@ class DashboardStatsResponse(BaseModel):
 	total_detections: int
 	waste_found_count: int
 	pending_tasks: int
+	unassigned_tasks: int
+	assigned_tasks: int
 	completed_tasks: int

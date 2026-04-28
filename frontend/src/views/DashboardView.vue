@@ -3,6 +3,16 @@
     <header class="page-header">
       <h2>校园垃圾检测综合看板</h2>
       <p>左侧检测画面，右侧数据统计与实时任务</p>
+      <div class="header-actions">
+        <el-button
+          type="danger"
+          plain
+          :loading="resetting"
+          @click="handleReset"
+        >
+          重置统计数据
+        </el-button>
+      </div>
     </header>
 
     <el-row :gutter="16" class="layout-row">
@@ -34,7 +44,7 @@
         <el-card class="task-card" shadow="hover">
           <template #header>
             <div class="section-header">
-              <span>实时任务</span>
+              <span>实时调度任务</span>
               <el-button text type="primary" :loading="tasksLoading" @click="fetchTasks">刷新</el-button>
             </div>
           </template>
@@ -42,30 +52,37 @@
           <div v-loading="tasksLoading" class="task-stream">
             <el-empty v-if="!tasks.length && !tasksLoading" description="暂无实时任务" />
 
-            <el-card v-for="task in tasks" :key="task.id" class="task-item" shadow="never">
+            <el-card v-for="task in pagedTasks" :key="task.id" class="task-item" shadow="never">
               <div class="task-item-head">
                 <div>
                   <span class="task-id">任务 #{{ task.id }}</span>
-                  <el-tag :type="statusType(task.status)" class="task-status">{{ statusText(task.status) }}</el-tag>
+                  <el-tag :type="statusType(task)" class="task-status">{{ statusText(task) }}</el-tag>
                 </div>
                 <span class="task-time">{{ formatTime(task.created_at) }}</span>
               </div>
 
               <div class="task-item-body">
                 <div class="task-field">
-                  <span class="field-label">视频时间戳</span>
-                  <span class="field-value">{{ task?.record?.frame_time || "-" }}</span>
+                  <span class="field-label">调度状态</span>
+                  <span class="field-value">{{ scheduleText(task) }}</span>
                 </div>
                 <div class="task-field">
-                  <span class="field-label">视频来源</span>
-                  <span class="field-value ellipsis">{{ task?.record?.video_source || "-" }}</span>
-                </div>
-                <div class="task-field">
-                  <span class="field-label">抓拍图片</span>
-                  <span class="field-value ellipsis">{{ task?.record?.screenshot_url || "-" }}</span>
+                  <span class="field-label">当前处理人</span>
+                  <span class="field-value">{{ workerText(task) }}</span>
                 </div>
               </div>
             </el-card>
+          </div>
+
+          <div v-if="tasks.length" class="task-pagination">
+            <el-pagination
+              background
+              layout="prev, pager, next"
+              :current-page="currentPage"
+              :page-size="pageSize"
+              :total="tasks.length"
+              @current-change="handlePageChange"
+            />
           </div>
         </el-card>
       </el-col>
@@ -75,9 +92,10 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { Aim, CircleCheck, Clock, DataLine } from "@element-plus/icons-vue";
 
-import { getStats, getTaskList } from "../api";
+import { getStats, getTaskList, resetDashboardData } from "../api";
 import DetectionResult from "../components/DetectionResult.vue";
 import VideoUpload from "../components/VideoUpload.vue";
 
@@ -85,6 +103,8 @@ const stats = ref({
   total_detections: 0,
   waste_found_count: 0,
   pending_tasks: 0,
+  unassigned_tasks: 0,
+  assigned_tasks: 0,
   completed_tasks: 0,
 });
 const tasks = ref([]);
@@ -92,9 +112,16 @@ const tasksLoading = ref(false);
 const analysisStatus = ref("idle");
 const analysisStartedAt = ref(null);
 const baselineTaskCount = ref(0);
+const currentPage = ref(1);
+const pageSize = 6;
+const resetting = ref(false);
 let refreshTimer = null;
 
 const latestTask = computed(() => (tasks.value.length ? tasks.value[0] : null));
+const pagedTasks = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return tasks.value.slice(start, start + pageSize);
+});
 
 const statCards = computed(() => [
   {
@@ -112,18 +139,25 @@ const statCards = computed(() => [
     theme: "theme-orange",
   },
   {
-    key: "pending_tasks",
-    label: "待处理任务",
-    value: stats.value.pending_tasks,
+    key: "unassigned_tasks",
+    label: "待分配任务",
+    value: stats.value.unassigned_tasks ?? 0,
     icon: Clock,
     theme: "theme-red",
+  },
+  {
+    key: "assigned_tasks",
+    label: "处理中任务",
+    value: stats.value.assigned_tasks ?? 0,
+    icon: CircleCheck,
+    theme: "theme-green",
   },
   {
     key: "completed_tasks",
     label: "已完成任务",
     value: stats.value.completed_tasks,
     icon: CircleCheck,
-    theme: "theme-green",
+    theme: "theme-green-soft",
   },
 ]);
 
@@ -139,8 +173,12 @@ const fetchStats = async () => {
 const fetchTasks = async () => {
   tasksLoading.value = true;
   try {
-    const { data } = await getTaskList({ skip: 0, limit: 20 });
+    const { data } = await getTaskList({ skip: 0, limit: 100 });
     tasks.value = data;
+    const maxPage = Math.max(1, Math.ceil(tasks.value.length / pageSize));
+    if (currentPage.value > maxPage) {
+      currentPage.value = maxPage;
+    }
     updateAnalysisStatus();
   } catch {
     // 后端短暂不可用时静默容错，避免频繁打断用户
@@ -164,19 +202,72 @@ const updateAnalysisStatus = () => {
   }
 };
 
-const statusType = (status) => {
-  if (status === "completed") return "success";
-  return "warning";
+const statusType = (task) => {
+  if (task?.status === "completed") return "success";
+  if (task?.worker_id || task?.worker?.id) return "warning";
+  return "info";
 };
 
-const statusText = (status) => {
-  if (status === "completed") return "已完成";
-  return "待处理";
+const statusText = (task) => {
+  if (task?.status === "completed") return "已完成";
+  if (task?.worker_id || task?.worker?.id) return "处理中";
+  return "待分配";
+};
+
+const workerText = (task) => {
+  if (task?.worker?.name) {
+    return `${task.worker.name}${task.worker.phone ? ` (${task.worker.phone})` : ""}`;
+  }
+  return "待系统调度";
+};
+
+const scheduleText = (task) => {
+  if (task?.status === "completed") {
+    return "任务已完成";
+  }
+  if (task?.worker?.name) {
+    return "已完成自动指派，等待清理完成";
+  }
+  return "等待调度分配";
 };
 
 const formatTime = (value) => {
   if (!value) return "-";
   return new Date(value).toLocaleString();
+};
+
+const handlePageChange = (page) => {
+  currentPage.value = page;
+};
+
+const handleReset = async () => {
+  try {
+    await ElMessageBox.confirm(
+      "这会清空当前检测记录、任务、截图和结果视频，但会保留环卫工人信息。是否继续？",
+      "重置统计数据",
+      {
+        confirmButtonText: "确认重置",
+        cancelButtonText: "取消",
+        type: "warning",
+      }
+    );
+  } catch {
+    return;
+  }
+
+  resetting.value = true;
+  try {
+    const { data } = await resetDashboardData();
+    stats.value = data;
+    tasks.value = [];
+    currentPage.value = 1;
+    analysisStatus.value = "idle";
+    analysisStartedAt.value = null;
+    baselineTaskCount.value = 0;
+    ElMessage.success("统计数据已重置");
+  } finally {
+    resetting.value = false;
+  }
 };
 
 const handleUploaded = (result) => {
@@ -212,6 +303,10 @@ onBeforeUnmount(() => {
   margin-bottom: 16px;
 }
 
+.header-actions {
+  margin-top: 12px;
+}
+
 .page-header h2 {
   margin: 0;
   font-size: 24px;
@@ -224,7 +319,7 @@ onBeforeUnmount(() => {
 }
 
 .layout-row {
-  align-items: stretch;
+  align-items: flex-start;
 }
 
 .left-panel,
@@ -232,15 +327,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.left-panel {
-  position: relative;
-}
-
-.left-panel :deep(.upload-wrapper),
-.left-panel :deep(.result-card) {
-  flex: 1;
 }
 
 .result-panel {
@@ -257,6 +343,9 @@ onBeforeUnmount(() => {
 
 .task-card {
   flex: 1;
+  min-height: 640px;
+  display: flex;
+  flex-direction: column;
 }
 
 .task-stream {
@@ -264,6 +353,9 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 12px;
   min-height: 420px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .task-item {
@@ -318,19 +410,18 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.ellipsis {
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   font-weight: 600;
   color: #111827;
+}
+
+.task-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 
 .stat-content {
@@ -365,6 +456,10 @@ onBeforeUnmount(() => {
   background: linear-gradient(145deg, #22c55e, #16a34a);
 }
 
+.theme-green-soft {
+  background: linear-gradient(145deg, #10b981, #059669);
+}
+
 .meta {
   display: flex;
   flex-direction: column;
@@ -387,10 +482,6 @@ onBeforeUnmount(() => {
 @media (max-width: 992px) {
   .right-panel {
     margin-top: 16px;
-  }
-
-  .ellipsis {
-    max-width: 180px;
   }
 }
 </style>

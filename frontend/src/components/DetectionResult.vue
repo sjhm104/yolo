@@ -44,8 +44,8 @@
             {{ formatConfidence(latestTask.record?.confidence) }}
           </el-descriptions-item>
           <el-descriptions-item label="任务状态">
-            <el-tag :type="latestTask.status === 'completed' ? 'success' : 'warning'" effect="dark">
-              {{ latestTask.status === "completed" ? "已完成" : "待处理" }}
+            <el-tag :type="taskStatusType(latestTask)" effect="dark">
+              {{ taskStatusText(latestTask) }}
             </el-tag>
           </el-descriptions-item>
         </el-descriptions>
@@ -108,6 +108,20 @@ const statusTagText = computed(() => {
 const formatConfidence = (value) => {
   if (value === null || value === undefined) return "-";
   return `${(Number(value) * 100).toFixed(1)}%`;
+};
+
+const taskStatusText = (task) => {
+  if (!task) return "-";
+  if (task.status === "completed") return "已完成";
+  if (task.worker_id || task.worker?.id) return "处理中";
+  return "待分配";
+};
+
+const taskStatusType = (task) => {
+  if (!task) return "info";
+  if (task.status === "completed") return "success";
+  if (task.worker_id || task.worker?.id) return "warning";
+  return "info";
 };
 </script>
 

@@ -22,8 +22,8 @@ os.environ.setdefault("MKL_NUM_THREADS", "1")
 def train_garbage_detector(
 	data_yaml: str | Path = DEFAULT_DATA_YAML,
 	model_path: str | Path = DEFAULT_MODEL,
-	epochs: int = 100,
-	imgsz: int = 416,
+	epochs: int = 40,
+	imgsz: int = 512,
 	batch: int = 2,
 	device: str | int = "0",
 	workers: int = 0,

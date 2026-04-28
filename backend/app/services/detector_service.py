@@ -25,6 +25,7 @@ from app.db.base import CleaningTask, CleaningTaskStatus, DetectionRecord
 detector = GarbageVideoDetector()
 UPLOAD_VIDEOS_DIR = Path(__file__).resolve().parents[2] / "uploads" / "videos"
 OUTPUT_SCREENSHOTS_DIR = Path(__file__).resolve().parents[2] / "outputs" / "screenshots"
+OUTPUT_VIDEOS_DIR = Path(__file__).resolve().parents[2] / "outputs" / "videos"
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv"}
 DEFAULT_DOWNLOAD_HEADERS = {
 	"User-Agent": "CampusWasteDetector/1.0",
@@ -40,6 +41,7 @@ MAX_DOWNLOAD_SIZE_BYTES = 1024 * 1024 * 1024
 def ensure_video_dirs() -> None:
 	UPLOAD_VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
 	OUTPUT_SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+	OUTPUT_VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _build_screenshot_url(raw_path: str) -> str:
@@ -63,6 +65,13 @@ def _resolve_video_suffix(video_url: str, content_type: str | None) -> str:
 		return ".mkv"
 
 	return ".mp4"
+
+
+def _build_output_video_path(video_path: str, video_source: str | None = None) -> Path:
+	source_name = video_source or Path(video_path).stem
+	safe_stem = "".join(char if char.isalnum() or char in {"-", "_"} else "_" for char in source_name)
+	safe_stem = safe_stem.strip("_") or Path(video_path).stem or "analysis"
+	return OUTPUT_VIDEOS_DIR / f"{safe_stem}_{uuid4().hex[:8]}_result.mp4"
 
 
 def _sanitize_headers(headers: dict[str, str] | None) -> dict[str, str]:
@@ -137,8 +146,13 @@ def _analyze_video_background_sync(video_path: str, db_session: Any, video_sourc
 
 	try:
 		source_name = video_source or Path(video_path).name
+		output_video_path = _build_output_video_path(video_path, video_source)
 
-		for detection in detector.process_video_stream(video_path, str(OUTPUT_SCREENSHOTS_DIR)):
+		for detection in detector.process_video_stream(
+			video_path,
+			str(OUTPUT_SCREENSHOTS_DIR),
+			output_video_path=str(output_video_path),
+		):
 			record = DetectionRecord(
 				video_source=source_name,
 				frame_time=str(detection["frame_time"]),

@@ -58,7 +58,7 @@
 
         <el-table-column prop="status" label="状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
+            <el-tag :type="statusType(row)">{{ statusText(row) }}</el-tag>
           </template>
         </el-table-column>
 
@@ -106,14 +106,16 @@ const resolveImageUrl = (path) => {
   return origin + "/" + path.replace(/^\/+/, "");
 };
 
-const statusType = (status) => {
-  if (status === "completed") return "success";
-  return "warning";
+const statusType = (task) => {
+  if (task?.status === "completed") return "success";
+  if (task?.worker_id || task?.worker?.id) return "warning";
+  return "info";
 };
 
-const statusText = (status) => {
-  if (status === "completed") return "已完成";
-  return "待处理";
+const statusText = (task) => {
+  if (task?.status === "completed") return "已完成";
+  if (task?.worker_id || task?.worker?.id) return "处理中";
+  return "待分配";
 };
 
 const formatTime = (value) => {
