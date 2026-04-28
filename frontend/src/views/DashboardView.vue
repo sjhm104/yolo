@@ -8,7 +8,11 @@
     <el-row :gutter="16" class="layout-row">
       <el-col :xs="24" :lg="12" class="left-panel">
         <VideoUpload @uploaded="handleUploaded" />
-        <DetectionResult :record="latestVideoResult" class="result-panel" />
+        <DetectionResult
+          :status="analysisStatus"
+          :latest-task="latestTask"
+          class="result-panel"
+        />
       </el-col>
 
       <el-col :xs="24" :lg="12" class="right-panel">
@@ -27,26 +31,6 @@
             </el-card>
           </el-col>
         </el-row>
-
-        <el-card class="console-card" shadow="hover">
-          <template #header>
-            <div class="section-header">
-              <span>视频分析控制台</span>
-            </div>
-          </template>
-
-          <div class="console-form">
-            <el-input
-              v-model="videoPath"
-              placeholder="请输入本地测试视频路径，例如 backend/uploads/videos/demo.mp4"
-              clearable
-            />
-            <el-button type="primary" :loading="analyzeLoading" @click="handleAnalyze">
-              启动视频检测
-            </el-button>
-          </div>
-        </el-card>
-
         <el-card class="task-card" shadow="hover">
           <template #header>
             <div class="section-header">
@@ -91,10 +75,9 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref } from "vue";
-import { ElMessage } from "element-plus";
 import { Aim, CircleCheck, Clock, DataLine } from "@element-plus/icons-vue";
 
-import { getStats, getTaskList, startVideoAnalysis } from "../api";
+import { getStats, getTaskList } from "../api";
 import DetectionResult from "../components/DetectionResult.vue";
 import VideoUpload from "../components/VideoUpload.vue";
 
@@ -104,12 +87,14 @@ const stats = ref({
   pending_tasks: 0,
   completed_tasks: 0,
 });
-const latestVideoResult = ref(null);
 const tasks = ref([]);
 const tasksLoading = ref(false);
-const analyzeLoading = ref(false);
-const videoPath = ref("");
+const analysisStatus = ref("idle");
+const analysisStartedAt = ref(null);
+const baselineTaskCount = ref(0);
 let refreshTimer = null;
+
+const latestTask = computed(() => (tasks.value.length ? tasks.value[0] : null));
 
 const statCards = computed(() => [
   {
@@ -156,6 +141,7 @@ const fetchTasks = async () => {
   try {
     const { data } = await getTaskList({ skip: 0, limit: 20 });
     tasks.value = data;
+    updateAnalysisStatus();
   } catch {
     // 后端短暂不可用时静默容错，避免频繁打断用户
   } finally {
@@ -163,20 +149,18 @@ const fetchTasks = async () => {
   }
 };
 
-const handleAnalyze = async () => {
-  if (!videoPath.value.trim()) {
-    ElMessage.warning("请输入本地测试视频路径");
+const updateAnalysisStatus = () => {
+  if (analysisStatus.value !== "analyzing") {
     return;
   }
 
-  analyzeLoading.value = true;
-  try {
-    await startVideoAnalysis(videoPath.value.trim());
-    ElMessage.success("视频正在后台分析中");
-    await fetchStats();
-    await fetchTasks();
-  } finally {
-    analyzeLoading.value = false;
+  if (tasks.value.length > baselineTaskCount.value) {
+    analysisStatus.value = "done";
+    return;
+  }
+
+  if (analysisStartedAt.value && Date.now() - analysisStartedAt.value >= 60000) {
+    analysisStatus.value = "empty";
   }
 };
 
@@ -196,9 +180,9 @@ const formatTime = (value) => {
 };
 
 const handleUploaded = (result) => {
-  if (result?.output_video_url) {
-    latestVideoResult.value = result;
-  }
+  analysisStatus.value = "analyzing";
+  analysisStartedAt.value = Date.now();
+  baselineTaskCount.value = tasks.value.length;
   fetchStats();
   fetchTasks();
 };
@@ -267,15 +251,8 @@ onBeforeUnmount(() => {
   border: none;
 }
 
-.console-card,
 .task-card {
   border: none;
-}
-
-.console-form {
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 
 .task-card {
@@ -410,11 +387,6 @@ onBeforeUnmount(() => {
 @media (max-width: 992px) {
   .right-panel {
     margin-top: 16px;
-  }
-
-  .console-form {
-    flex-direction: column;
-    align-items: stretch;
   }
 
   .ellipsis {

@@ -4,9 +4,11 @@ pydantic
 pydantic-settings
 sqlalchemy
 pymysql
+cryptography
 torch
 torchvision
 opencv-python
 python-multipart
 apscheduler
 ultralytics
+httpx

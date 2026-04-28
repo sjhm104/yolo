@@ -50,9 +50,15 @@ if (-not (Test-Path $frontendEnvFile)) {
 }
 
 if (-not $SkipMySQL) {
-    $mysqlCommand = "& '$mysqlMysqldExe' --defaults-file='$mysqlDefaultsFile' --console"
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", $mysqlCommand | Out-Null
-    Write-Host "Window A started: MySQL instance"
+    $mysqlRunning = Get-Process mysqld -ErrorAction SilentlyContinue
+    if ($mysqlRunning) {
+        Write-Host "MySQL already running, skip starting a new instance."
+    }
+    else {
+        $mysqlCommand = "& '$mysqlMysqldExe' --defaults-file='$mysqlDefaultsFile' --console"
+        Start-Process powershell -ArgumentList "-NoExit", "-Command", $mysqlCommand | Out-Null
+        Write-Host "Window A started: MySQL instance"
+    }
 }
 
 if ($InitDatabase) {
@@ -65,12 +71,14 @@ $backendCommand = @"
 Set-Location '$backendDir'
 & '$condaExe' run -n $CondaEnv python -m pip install --upgrade pip
 & '$condaExe' run -n $CondaEnv python -m pip install -r '$backendDir\requirements.txt'
-& '$condaExe' run -n $CondaEnv python -m uvicorn app.main:app --reload --reload-exclude "uploads/*" --reload-exclude "outputs/*" --reload-exclude "tools/*" --host 0.0.0.0 --port $BackendPort
+& '$condaExe' run -n $CondaEnv python -m uvicorn app.main:app --reload --reload-exclude='uploads/*' --reload-exclude='outputs/*' --reload-exclude='tools/*' --host 0.0.0.0 --port $BackendPort
 "@
 
 $frontendCommand = @"
 Set-Location '$frontendDir'
-Copy-Item .env.example .env -Force
+if (-not (Test-Path '.env')) {
+    Copy-Item .env.example .env -Force
+}
 npm install
 npm run dev -- --host 0.0.0.0 --port $FrontendPort
 "@
