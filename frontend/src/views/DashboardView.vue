@@ -1,42 +1,76 @@
 <template>
   <section class="dashboard-page">
     <header class="page-header">
-      <h2>校园垃圾检测数据大屏</h2>
-      <p>实时掌握巡检视频分析与处置任务进展</p>
+      <h2>校园垃圾检测综合看板</h2>
+      <p>左侧检测画面，右侧数据统计与实时任务</p>
     </header>
 
-    <el-row :gutter="16">
-      <el-col :xs="24" :sm="12" :lg="6" v-for="card in statCards" :key="card.key">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="icon-box" :class="card.theme">
-              <el-icon :size="24"><component :is="card.icon" /></el-icon>
+    <el-row :gutter="16" class="layout-row">
+      <el-col :xs="24" :lg="12" class="left-panel">
+        <VideoUpload @uploaded="handleUploaded" />
+        <DetectionResult :record="latestVideoResult" class="result-panel" />
+      </el-col>
+
+      <el-col :xs="24" :lg="12" class="right-panel">
+        <el-row :gutter="12">
+          <el-col :xs="12" :sm="12" :lg="12" v-for="card in statCards" :key="card.key">
+            <el-card class="stat-card" shadow="hover">
+              <div class="stat-content">
+                <div class="icon-box" :class="card.theme">
+                  <el-icon :size="24"><component :is="card.icon" /></el-icon>
+                </div>
+                <div class="meta">
+                  <p class="label">{{ card.label }}</p>
+                  <p class="value">{{ card.value }}</p>
+                </div>
+              </div>
+            </el-card>
+          </el-col>
+        </el-row>
+
+        <el-card class="task-card" shadow="hover">
+          <template #header>
+            <div class="section-header">
+              <span>实时任务</span>
+              <el-button text type="primary" :loading="tasksLoading" @click="fetchTasks">刷新</el-button>
             </div>
-            <div class="meta">
-              <p class="label">{{ card.label }}</p>
-              <p class="value">{{ card.value }}</p>
-            </div>
+          </template>
+
+          <div v-loading="tasksLoading" class="task-stream">
+            <el-empty v-if="!tasks.length && !tasksLoading" description="暂无实时任务" />
+
+            <el-card v-for="task in tasks" :key="task.id" class="task-item" shadow="never">
+              <div class="task-item-head">
+                <div>
+                  <span class="task-id">任务 #{{ task.id }}</span>
+                  <el-tag :type="statusType(task.status)" class="task-status">{{ statusText(task.status) }}</el-tag>
+                </div>
+                <span class="task-time">{{ formatTime(task.created_at) }}</span>
+              </div>
+
+              <div class="task-item-body">
+                <div class="task-field">
+                  <span class="field-label">坐标</span>
+                  <span class="field-value">{{ task?.detection_record?.latitude }}, {{ task?.detection_record?.longitude }}</span>
+                </div>
+                <div class="task-field">
+                  <span class="field-label">关联检测</span>
+                  <span class="field-value ellipsis">{{ task?.detection_record?.image_url || '-' }}</span>
+                </div>
+              </div>
+            </el-card>
           </div>
         </el-card>
-      </el-col>
-    </el-row>
-
-    <el-row :gutter="16" class="loop-row">
-      <el-col :xs="24" :lg="11">
-        <VideoUpload @uploaded="handleUploaded" />
-      </el-col>
-      <el-col :xs="24" :lg="13">
-        <DetectionResult :record="latestVideoResult" />
       </el-col>
     </el-row>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onBeforeUnmount, ref } from "vue";
 import { Aim, CircleCheck, Clock, DataLine } from "@element-plus/icons-vue";
 
-import { getStats } from "../api";
+import { getStats, getTaskList } from "../api";
 import DetectionResult from "../components/DetectionResult.vue";
 import VideoUpload from "../components/VideoUpload.vue";
 
@@ -47,6 +81,9 @@ const stats = ref({
   completed_tasks: 0,
 });
 const latestVideoResult = ref(null);
+const tasks = ref([]);
+const tasksLoading = ref(false);
+let refreshTimer = null;
 
 const statCards = computed(() => [
   {
@@ -88,12 +125,55 @@ const fetchStats = async () => {
   }
 };
 
+const fetchTasks = async () => {
+  tasksLoading.value = true;
+  try {
+    const { data } = await getTaskList({ skip: 0, limit: 20 });
+    tasks.value = data;
+  } catch {
+    // 后端短暂不可用时静默容错，避免频繁打断用户
+  } finally {
+    tasksLoading.value = false;
+  }
+};
+
+const statusType = (status) => {
+  if (status === "completed") return "success";
+  if (status === "assigned") return "danger";
+  return "warning";
+};
+
+const statusText = (status) => {
+  if (status === "completed") return "已完成";
+  if (status === "assigned") return "处理中";
+  return "待处理";
+};
+
+const formatTime = (value) => {
+  if (!value) return "-";
+  return new Date(value).toLocaleString();
+};
+
 const handleUploaded = (result) => {
   latestVideoResult.value = result;
   fetchStats();
+  fetchTasks();
 };
 
 onMounted(fetchStats);
+onMounted(fetchTasks);
+onMounted(() => {
+  refreshTimer = window.setInterval(() => {
+    fetchStats();
+    fetchTasks();
+  }, 10000);
+});
+
+onBeforeUnmount(() => {
+  if (refreshTimer) {
+    window.clearInterval(refreshTimer);
+  }
+});
 </script>
 
 <style scoped>
@@ -116,13 +196,111 @@ onMounted(fetchStats);
   color: #6b7280;
 }
 
+.layout-row {
+  align-items: stretch;
+}
+
+.left-panel,
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.left-panel {
+  position: relative;
+}
+
+.left-panel :deep(.upload-wrapper),
+.left-panel :deep(.result-card) {
+  flex: 1;
+}
+
+.result-panel {
+  margin-top: 0;
+}
+
 .stat-card {
-  margin-bottom: 16px;
   border: none;
 }
 
-.loop-row {
-  margin-top: 4px;
+.task-card {
+  border: none;
+  flex: 1;
+}
+
+.task-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 520px;
+}
+
+.task-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.task-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.task-id {
+  font-weight: 700;
+  color: #111827;
+}
+
+.task-status {
+  margin-left: 8px;
+}
+
+.task-time {
+  color: #6b7280;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.task-item-body {
+  display: grid;
+  gap: 10px;
+}
+
+.task-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field-label {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.field-value {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ellipsis {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  color: #111827;
 }
 
 .stat-content {
@@ -174,5 +352,15 @@ onMounted(fetchStats);
   font-size: 30px;
   font-weight: 700;
   color: #111827;
+}
+
+@media (max-width: 992px) {
+  .right-panel {
+    margin-top: 16px;
+  }
+
+  .ellipsis {
+    max-width: 180px;
+  }
 }
 </style>

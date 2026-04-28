@@ -13,11 +13,7 @@
       >
         <el-menu-item index="/dashboard">
           <el-icon><DataBoard /></el-icon>
-          <span>数据大屏</span>
-        </el-menu-item>
-        <el-menu-item index="/tasks">
-          <el-icon><List /></el-icon>
-          <span>任务管理</span>
+          <span>综合看板</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -32,7 +28,7 @@
 </template>
 
 <script setup>
-import { DataBoard, List } from "@element-plus/icons-vue";
+import { DataBoard } from "@element-plus/icons-vue";
 import { useRoute, useRouter } from "vue-router";
 
 const route = useRoute();

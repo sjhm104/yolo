@@ -15,8 +15,7 @@ const routes = [
 	},
 	{
 		path: "/tasks",
-		name: "tasks",
-		component: TaskListView,
+		redirect: "/dashboard",
 	},
 ];
 
