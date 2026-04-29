@@ -9,6 +9,8 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
+from ai.models.yolo.cbam import register_cbam_with_ultralytics
+
 
 class GarbageVideoDetector:
 	"""基于 YOLOv8 的视频流垃圾检测器。"""
@@ -34,6 +36,7 @@ class GarbageVideoDetector:
 		self._last_report_boxes: list[tuple[float, float, float, float]] = []
 		self._last_report_time_seconds: float | None = None
 		# Ultralytics 会在本地不存在时自动下载预训练权重。
+		register_cbam_with_ultralytics()
 		self.model = YOLO(self.model_path)
 
 	@staticmethod
@@ -41,10 +44,12 @@ class GarbageVideoDetector:
 		project_root = Path(__file__).resolve().parents[3]
 		runs_dir = project_root / "runs" / "detect"
 		patterns = [
+			"garbage_single*/weights/best.pt",
+			"combined_garbage_cbam*/weights/best.pt",
+			"uav_waste_cbam*/weights/best.pt",
 			"combined_garbage_finetune*/weights/best.pt",
 			"combined_garbage*/weights/best.pt",
 			"uav_waste_single*/weights/best.pt",
-			"garbage_single*/weights/best.pt",
 		]
 		for pattern in patterns:
 			custom_candidates = sorted(
